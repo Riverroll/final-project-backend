@@ -5,9 +5,9 @@ const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
 // const { db, query } = require("./database");
-const { authRoutes } = require("./src/routes");
-const { attendanceRouter } = require("./src/routes");
-const { dataRouter } = require("./src/routes");
+const { authRoutes } = require("./routes");
+const { attendanceRouter } = require("./routes");
+const { dataRouter } = require("./routes");
 const bodyParser = require("body-parser");
 const path = require("path");
 
