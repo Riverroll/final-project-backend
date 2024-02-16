@@ -1,5 +1,5 @@
 require("dotenv").config({
-  path: ".env.local",
+  path: ".env",
 });
 const { db, query } = require("../database");
 const jwt = require("jsonwebtoken");
