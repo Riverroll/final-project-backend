@@ -1,7 +1,7 @@
 require("dotenv").config({
   path: ".env",
 });
-const { db, query } = require("../database");
+const { pool, query } = require("../database");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const multer = require("multer");
@@ -108,8 +108,8 @@ module.exports = {
 
         // Tambahkan LIMIT dan OFFSET untuk pagination
         sqlQuery += `
-          LIMIT ${db.escape(items)}
-          OFFSET ${db.escape((pages - 1) * items)};
+          LIMIT ${pool.escape(items)}
+          OFFSET ${pool.escape((pages - 1) * items)};
         `;
       } else {
         sqlQuery = `
@@ -144,9 +144,9 @@ module.exports = {
           sqlParams.push(`%${searchName}%`);
         }
 
-        sqlQuery += ` AND attendance.user_id = ${db.escape(user_id)}`;
+        sqlQuery += ` AND attendance.user_id = ${pool.escape(user_id)}`;
 
-        countQuery += ` AND attendance.user_id = ${db.escape(user_id)}`;
+        countQuery += ` AND attendance.user_id = ${pool.escape(user_id)}`;
 
         if (sortOrder === "asc") {
           sqlQuery += `
@@ -162,8 +162,8 @@ module.exports = {
 
         // Tambahkan LIMIT dan OFFSET untuk pagination
         sqlQuery += `
-          LIMIT ${db.escape(items)}
-          OFFSET ${db.escape((pages - 1) * items)};
+          LIMIT ${pool.escape(items)}
+          OFFSET ${pool.escape((pages - 1) * items)};
         `;
       }
 
@@ -194,6 +194,8 @@ module.exports = {
       // const imageFileName = req.file.filename;
       const imageFile = req.file;
 
+      console.log(address, latitude, longitude, id_user, description);
+
       if (!address || !latitude || !longitude) {
         return res.status(400).json({ message: "Wait location first" });
       }
@@ -211,7 +213,7 @@ module.exports = {
       VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
     `;
 
-      db.query(
+      pool.query(
         insertQuery,
         [
           address,

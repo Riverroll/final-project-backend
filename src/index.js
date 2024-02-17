@@ -1,5 +1,5 @@
 require("dotenv").config({
-  path: ".env.",
+  path: ".env",
 });
 const express = require("express");
 const cors = require("cors");
@@ -11,7 +11,7 @@ const { dataRouter } = require("./routes");
 const bodyParser = require("body-parser");
 const path = require("path");
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8000;
 const app = express();
 app.use(
   cors({
@@ -29,7 +29,7 @@ app.use(express.static(pathToFile));
 app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/data", dataRouter);
-app.use("/uploads", express.static(path.join(__dirname, "src/uploads/")));
+app.use("/uploads", express.static(path.join(__dirname, "uploads/")));
 //   app.use("/api/user-profile", userProfileRoutes);
 //   app.use("/api/admins/categories", categoryRoutes);
 //   app.use("/api/products", productRoutes);

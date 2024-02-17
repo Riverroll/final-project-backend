@@ -1,7 +1,7 @@
 require("dotenv").config({
   path: ".env",
 });
-const { db, query } = require("../database");
+const { pool, query } = require("../database");
 const jwt = require("jsonwebtoken");
 
 const env = process.env;
@@ -44,23 +44,23 @@ module.exports = {
         };
       } else {
         // Non-admin logic to get data based on user_id
-        const totalAttendanceQuery = `SELECT COUNT(*) AS totalAttendance FROM attendance WHERE user_id = ${db.escape(
+        const totalAttendanceQuery = `SELECT COUNT(*) AS totalAttendance FROM attendance WHERE user_id = ${pool.escape(
           user_id
         )}`;
         const totalAttendanceResult = await query(totalAttendanceQuery);
 
-        const lastAttendanceQuery = `SELECT MAX(date) AS lastAttendance FROM attendance WHERE user_id = ${db.escape(
+        const lastAttendanceQuery = `SELECT MAX(date) AS lastAttendance FROM attendance WHERE user_id = ${pool.escape(
           user_id
         )}`;
         const lastAttendanceResult = await query(lastAttendanceQuery);
 
         const today = new Date().toISOString().split("T")[0];
-        const todayAttendanceQuery = `SELECT COUNT(*) AS todayAttendance FROM attendance WHERE user_id = ${db.escape(
+        const todayAttendanceQuery = `SELECT COUNT(*) AS todayAttendance FROM attendance WHERE user_id = ${pool.escape(
           user_id
         )} AND DATE(date) = '${today}'`;
         const todayAttendanceResult = await query(todayAttendanceQuery);
 
-        const lastLocationQuery = `SELECT location_lat as latitude,location_long as longitude FROM attendance WHERE user_id = ${db.escape(
+        const lastLocationQuery = `SELECT location_lat as latitude,location_long as longitude FROM attendance WHERE user_id = ${pool.escape(
           user_id
         )} ORDER BY date DESC LIMIT 1`;
         const lastLocationResult = await query(lastLocationQuery);
@@ -127,8 +127,8 @@ module.exports = {
       }
 
       sqlQuery += `
-        LIMIT ${db.escape(items)}
-        OFFSET ${db.escape((pages - 1) * items)};
+        LIMIT ${pool.escape(items)}
+        OFFSET ${pool.escape((pages - 1) * items)};
       `;
 
       // Execute the main query
@@ -154,7 +154,7 @@ module.exports = {
       });
     } catch (error) {
       console.error("Dashboard Error:", error);
-      res.status(500).send({ message: "Internal Server Error" });
+      res.status(500).send({ message: error });
     }
   },
 };

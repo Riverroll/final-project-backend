@@ -1,7 +1,7 @@
 require("dotenv").config({
   path: ".env",
 });
-const { db, query } = require("../database");
+const { pool, query } = require("../database");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 // const { getIdFromToken } = require("../helper/jwt-payload");
@@ -17,7 +17,7 @@ module.exports = {
 
       // Check apakah email sudah terdaftar
       const existingUser = await query(
-        `SELECT * FROM user WHERE email=${db.escape(email)}`
+        `SELECT * FROM user WHERE email=${pool.escape(email)}`
       );
 
       if (existingUser.length > 0) {
@@ -30,9 +30,9 @@ module.exports = {
       // Insert user baru ke database
       await query(`
         INSERT INTO user (name, email, password, isAdmin)
-        VALUES (${db.escape(name)}, ${db.escape(email)}, ${db.escape(
+        VALUES (${pool.escape(name)}, ${pool.escape(email)}, ${pool.escape(
         hashedPassword
-      )}, ${db.escape(role)})
+      )}, ${pool.escape(role)})
       `);
 
       res.status(201).send({ message: "Pendaftaran pengguna berhasil" });
@@ -53,9 +53,9 @@ module.exports = {
       }
       // Cari pengguna berdasarkan email atau username
       const user = await query(
-        `SELECT * FROM user WHERE email=${db.escape(
+        `SELECT * FROM user WHERE email=${pool.escape(
           identifier
-        )} OR name=${db.escape(identifier)}`
+        )} OR name=${pool.escape(identifier)}`
       );
 
       if (user.length === 0) {
@@ -91,8 +91,8 @@ module.exports = {
         },
       });
     } catch (error) {
-      console.error("Login Error:", error);
-      res.status(500).send({ message: "Internal Server Error" });
+      console.error("Error in registration:", error.message);
+      res.status(500).json({ error: "Internal Server Error" });
     }
   },
   editUser: async (req, res) => {
@@ -102,7 +102,7 @@ module.exports = {
 
       // Perhatikan bahwa kita memerlukan ID pengguna untuk mengidentifikasi pengguna yang akan diubah
       const user = await query(
-        `SELECT * FROM user WHERE user_id=${db.escape(user_id)}`
+        `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
       );
 
       if (user.length === 0) {
@@ -134,11 +134,11 @@ module.exports = {
 
       // Lakukan update ke dalam database
       await query(
-        `UPDATE user SET name=${db.escape(user[0].name)}, email=${db.escape(
+        `UPDATE user SET name=${pool.escape(user[0].name)}, email=${pool.escape(
           user[0].email
-        )}, password=${db.escape(user[0].password)}, isAdmin=${db.escape(
+        )}, password=${pool.escape(user[0].password)}, isAdmin=${pool.escape(
           user[0].isAdmin
-        )} WHERE user_id=${db.escape(user_id)}`
+        )} WHERE user_id=${pool.escape(user_id)}`
       );
 
       // Kirim respons bahwa update berhasil
@@ -154,7 +154,7 @@ module.exports = {
       console.log(user_id);
       // Perhatikan bahwa kita memerlukan ID pengguna untuk mengidentifikasi pengguna yang akan dihapus
       const user = await query(
-        `SELECT * FROM user WHERE user_id=${db.escape(user_id)}`
+        `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
       );
 
       if (user.length === 0) {
@@ -162,7 +162,7 @@ module.exports = {
       }
 
       // Lakukan penghapusan dari database
-      await query(`DELETE FROM user WHERE user_id=${db.escape(user_id)}`);
+      await query(`DELETE FROM user WHERE user_id=${pool.escape(user_id)}`);
 
       // Kirim respons bahwa penghapusan berhasil
       return res.status(200).send({ message: "User deleted successfully" });
@@ -178,7 +178,7 @@ module.exports = {
       const decodedToken = jwt.decode(token);
 
       const user = await query(
-        `SELECT * FROM user WHERE user_id=${db.escape(decodedToken.id)}`
+        `SELECT * FROM user WHERE user_id=${pool.escape(decodedToken.id)}`
       );
 
       if (user.length === 0) {
