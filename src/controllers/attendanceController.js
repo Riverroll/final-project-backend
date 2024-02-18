@@ -2,51 +2,7 @@ require("dotenv").config({
   path: ".env",
 });
 const { pool, query } = require("../database");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
-const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
-const { count } = require("console");
-
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, "uploads/"); // Folder tempat menyimpan gambar
-//   },
-//   filename: function (req, file, cb) {
-//     cb(null, Date.now() + path.extname(file.originalname));
-//   },
-// });
-
-// const storage = multer.diskStorage({
-//   destination: function (req, file, cb) {
-//     cb(null, path.join(__dirname, "../src/uploads/")); // Folder tempat menyimpan gambar
-//   },
-//   filename: function (req, file, cb) {
-//     const uniqueTimestamp = Date.now();
-//     const filename = `${uniqueTimestamp}_${file.originalname}`;
-//     cb(null, filename);
-//   },
-// });
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: function (req, file, cb) {
-      const uploadPath = path.resolve(__dirname, "..", "uploads");
-      cb(null, uploadPath); // Folder tempat menyimpan gambar
-    },
-    filename: function (req, file, cb) {
-      const uniqueTimestamp = Date.now();
-      const originalnameWithoutExtension = path.parse(file.originalname).name;
-      const filename = `${originalnameWithoutExtension}_${uniqueTimestamp}${path.extname(
-        file.originalname
-      )}`;
-      cb(null, filename);
-    },
-  }),
-});
-
-// const upload = multer({ storage: storage });
-
+const moment = require("moment-timezone");
 const env = process.env;
 
 module.exports = {
@@ -190,27 +146,21 @@ module.exports = {
   submitAttendance: async (req, res) => {
     try {
       // Proses menyimpan data ke database
-      const { address, latitude, longitude, id_user, description } = req.body;
-      // const imageFileName = req.file.filename;
-      const imageFile = req.file;
+      const { address, latitude, longitude, id_user, description, imageUrl } =
+        req.body;
 
-      console.log(address, latitude, longitude, id_user, description);
-
-      if (!address || !latitude || !longitude) {
-        return res.status(400).json({ message: "Wait location first" });
+      if (!latitude || !longitude) {
+        res
+          .status(500)
+          .json({ message: "Please wait for location information first" });
       }
 
-      if (imageFile.mimetype !== "image/jpeg") {
-        return res.status(400).json({ message: "File Type not valid" });
-      }
-      const uniqueTimestamp = Date.now();
-      const fileName = `${uniqueTimestamp}_${imageFile.originalname}.jpg`;
-      // Tambahkan tanggal dan waktu saat ini
-      const currentDate = new Date();
-      const formattedDate = currentDate.toISOString().split("T")[0];
+      const currentDate = moment().tz("Asia/Jakarta"); // Set zona waktu ke WIB
+      const formattedDate = currentDate.format("YYYY-MM-DD");
+      const formattedTime = currentDate.format("HH:mm:ss");
       const insertQuery = `
       INSERT INTO attendance (address, location_lat, location_long, user_id, description, checkin_photo, date, checkin_time) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
       pool.query(
@@ -221,27 +171,25 @@ module.exports = {
           longitude,
           id_user,
           description,
-          fileName,
+          imageUrl,
           formattedDate,
+          formattedTime,
         ],
         (err, result) => {
           if (err) {
-            console.error("Error menyimpan data ke database:", err);
-            res.status(500).json({ message: "Gagal menyimpan data di server" });
+            console.error("Error saving data to the database:", err);
+            res
+              .status(500)
+              .json({ message: "Failed to save data on the server" });
           } else {
-            console.log("Data berhasil disimpan di database");
-            fs.renameSync(
-              imageFile.path,
-              path.join(__dirname, "../../src/uploads", fileName)
-            );
-
-            res.json({ message: "Data berhasil disimpan di server" });
+            console.log("Data successfully saved to the database");
+            res.json({ message: "Data successfully saved on the server" });
           }
         }
       );
     } catch (error) {
       console.error("Error:", error.message);
-      res.status(500).json({ message: "Gagal menyimpan data di server" });
+      res.status(500).json({ message: "Failed to save data on the server" });
     }
   },
 };

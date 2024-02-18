@@ -4,12 +4,9 @@ require("dotenv").config({
 const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
-// const { db, query } = require("./database");
 const { authRoutes } = require("./routes");
 const { attendanceRouter } = require("./routes");
 const { dataRouter } = require("./routes");
-const bodyParser = require("body-parser");
-const path = require("path");
 
 const PORT = process.env.PORT || 8000;
 const app = express();
@@ -19,9 +16,7 @@ app.use(
     // credentials: true,
   })
 );
-const pathToFile = join(__dirname, "./public");
 app.use(express.json());
-app.use(express.static(pathToFile));
 //#region API ROUTES
 // ===========================
 // NOTE : Add your routes here
@@ -29,23 +24,9 @@ app.use(express.static(pathToFile));
 app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/data", dataRouter);
-app.use("/uploads", express.static(path.join(__dirname, "uploads/")));
-//   app.use("/api/user-profile", userProfileRoutes);
-//   app.use("/api/admins/categories", categoryRoutes);
-//   app.use("/api/products", productRoutes);
-//   app.use("/api/carts", cartRoutes);
-//   app.use("/api/status-orders", statusOrderRoutes);
-//   app.use("/api/admins", adminRoutes);
-//   app.use("/api/warehouses", warehouseRoutes);
-//   app.use("/api/rajaongkir", rajaOngkirRoutes);
-//   app.use("/api/admins/products", adminProductRoutes);
-//   app.use("/api/stocks", stockRoutes);
-//   app.use("/api/orders", orderRoutes);
-//   app.use("/api/admins/orders", adminOrderRoutes);
-//   app.use("/api/admins/stock-mutation", stockMutationRoutes);
 
 app.get("/api", (req, res) => {
-  res.send(`Hello, this is my API`);
+  res.send(`Hello, this is Sehat Murni Sejahtera API`);
 });
 
 app.get("/api/greetings", (req, res, next) => {
