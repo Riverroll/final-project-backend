@@ -28,7 +28,9 @@ module.exports = {
             attendance.checkin_photo,
             attendance.date,
             attendance.address,
-            attendance.description
+            attendance.description,
+            attendance.checkin_signature,
+            attendance.product_desc
             FROM 
             attendance
           INNER JOIN 
@@ -78,7 +80,9 @@ module.exports = {
             attendance.checkin_photo,
             attendance.date,
             attendance.description,
-            attendance.address
+            attendance.address,
+            attendance.checkin_signature,
+            attendance.product_desc
           FROM 
             attendance
           INNER JOIN 
@@ -146,8 +150,16 @@ module.exports = {
   submitAttendance: async (req, res) => {
     try {
       // Proses menyimpan data ke database
-      const { address, latitude, longitude, id_user, description, imageUrl } =
-        req.body;
+      const {
+        address,
+        latitude,
+        longitude,
+        id_user,
+        description,
+        imageUrl,
+        signatureUrl,
+        product,
+      } = req.body;
 
       if (!latitude || !longitude) {
         res
@@ -159,8 +171,8 @@ module.exports = {
       const formattedDate = currentDate.format("YYYY-MM-DD");
       const formattedTime = currentDate.format("HH:mm:ss");
       const insertQuery = `
-      INSERT INTO attendance (address, location_lat, location_long, user_id, description, checkin_photo, date, checkin_time) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO attendance (address, location_lat, location_long, user_id, description, checkin_photo, date, checkin_time, checkin_signature, product_desc) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
       pool.query(
@@ -174,6 +186,8 @@ module.exports = {
           imageUrl,
           formattedDate,
           formattedTime,
+          signatureUrl,
+          product,
         ],
         (err, result) => {
           if (err) {

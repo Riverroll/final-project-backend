@@ -14,7 +14,6 @@ module.exports = {
       let responseData;
 
       if (isAdmin === 1) {
-        // Admin logic to get total user, total attendance, and most frequent user
         const totalUserQuery = "SELECT COUNT(*) AS totalUsers FROM user";
         const totalUserResult = await query(totalUserQuery);
 
@@ -73,8 +72,6 @@ module.exports = {
         };
       }
 
-      console.log(responseData);
-
       return res.status(200).send({
         message: "Get Dashboard Data Success",
         data: responseData,
@@ -87,10 +84,6 @@ module.exports = {
 
   dataUser: async (req, res) => {
     try {
-      // const getUser = "SELECT * FROM user";
-      // const user = await query(getUser);
-
-      // console.log(user);
       const { page, itemsPerPage, sortOrder, searchName } = req.body;
 
       let items = itemsPerPage || 10;
@@ -131,17 +124,10 @@ module.exports = {
         OFFSET ${pool.escape((pages - 1) * items)};
       `;
 
-      // Execute the main query
       const results = await query(sqlQuery, sqlParams);
 
-      // Execute the count query
       const countResult = await query(countQuery, sqlParams);
       const totalCount = countResult[0].totalCount;
-
-      console.log(results);
-      console.log(totalCount);
-      console.log(countResult);
-      console.log(req.body);
 
       return res.status(200).send({
         message: "Get Dashboard Data Success",

@@ -13,21 +13,26 @@ module.exports = {
     try {
       const { name, email, password, role } = req.body;
 
-      // Lakukan validasi yang diperlukan
-
-      // Check apakah email sudah terdaftar
-      const existingUser = await query(
+      const existingEmail = await query(
         `SELECT * FROM user WHERE email=${pool.escape(email)}`
       );
 
-      if (existingUser.length > 0) {
-        return res.status(400).send({ message: "Email sudah terdaftar" });
+      if (existingEmail.length > 0) {
+        return res.status(400).send({ message: "Email is already registered" });
       }
 
-      // Hash password menggunakan bcrypt
+      const existingUsername = await query(
+        `SELECT * FROM user WHERE name=${pool.escape(name)}`
+      );
+
+      if (existingUsername.length > 0) {
+        return res
+          .status(400)
+          .send({ message: "Username is already registered" });
+      }
+
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Insert user baru ke database
       await query(`
         INSERT INTO user (name, email, password, isAdmin)
         VALUES (${pool.escape(name)}, ${pool.escape(email)}, ${pool.escape(
@@ -35,9 +40,9 @@ module.exports = {
       )}, ${pool.escape(role)})
       `);
 
-      res.status(201).send({ message: "Pendaftaran pengguna berhasil" });
+      res.status(201).send({ message: "User registration successful" });
     } catch (error) {
-      console.error("Error Pendaftaran:", error);
+      console.error("Registration Error:", error);
       res.status(500).send({ message: "Internal Server Error" });
     }
   },
@@ -51,7 +56,6 @@ module.exports = {
           .status(400)
           .send({ message: "Please insert the required field first" });
       }
-      // Cari pengguna berdasarkan email atau username
       const user = await query(
         `SELECT * FROM user WHERE email=${pool.escape(
           identifier
@@ -98,9 +102,6 @@ module.exports = {
   editUser: async (req, res) => {
     try {
       const { user_id, name, email, password, isAdmin } = req.body;
-      console.log(isAdmin);
-
-      // Perhatikan bahwa kita memerlukan ID pengguna untuk mengidentifikasi pengguna yang akan diubah
       const user = await query(
         `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
       );
@@ -109,7 +110,24 @@ module.exports = {
         return res.status(404).send({ message: "User not found" });
       }
 
-      // Di sini kita melakukan update hanya jika nilai yang diberikan tidak kosong
+      // const existingEmail = await query(
+      //   `SELECT * FROM user WHERE email=${pool.escape(email)}`
+      // );
+
+      // if (existingEmail.length > 0) {
+      //   return res.status(400).send({ message: "Email is already registered" });
+      // }
+
+      // const existingUsername = await query(
+      //   `SELECT * FROM user WHERE name=${pool.escape(name)}`
+      // );
+
+      // if (existingUsername.length > 0) {
+      //   return res
+      //     .status(400)
+      //     .send({ message: "Username is already registered" });
+      // }
+
       if (name !== undefined) {
         user[0].name = name;
       }
@@ -119,10 +137,7 @@ module.exports = {
       }
 
       if (password !== undefined) {
-        // Memeriksa apakah password baru sama dengan password di database
-
         if (password !== user[0].password) {
-          // Jika password berbeda, hash password baru
           const hashedPassword = await bcrypt.hash(password, 10);
           user[0].password = hashedPassword;
         }
@@ -132,7 +147,6 @@ module.exports = {
         user[0].isAdmin = isAdmin;
       }
 
-      // Lakukan update ke dalam database
       await query(
         `UPDATE user SET name=${pool.escape(user[0].name)}, email=${pool.escape(
           user[0].email
@@ -141,7 +155,6 @@ module.exports = {
         )} WHERE user_id=${pool.escape(user_id)}`
       );
 
-      // Kirim respons bahwa update berhasil
       return res.status(200).send({ message: "User updated successfully" });
     } catch (error) {
       console.error("Edit User Error:", error);
@@ -151,7 +164,7 @@ module.exports = {
   deleteUser: async (req, res) => {
     try {
       const { user_id } = req.params;
-      console.log(user_id);
+
       // Perhatikan bahwa kita memerlukan ID pengguna untuk mengidentifikasi pengguna yang akan dihapus
       const user = await query(
         `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
