@@ -4,11 +4,11 @@ require("dotenv").config({
 const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
-const { authRoutes } = require("./routes");
+const { authRoutes, customerRouter } = require("./routes");
 const { attendanceRouter } = require("./routes");
 const { dataRouter } = require("./routes");
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(
   cors({
@@ -24,6 +24,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/data", dataRouter);
+app.use("/api/customer", customerRouter);
 
 app.get("/api", (req, res) => {
   res.send(`Hello, this is Sehat Murni Sejahtera API`);

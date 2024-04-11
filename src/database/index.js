@@ -52,11 +52,11 @@ const env = process.env;
 
 // Gunakan createPool untuk menggunakan pooling koneksi
 const pool = mysql.createPool({
-  host: env.MYSQL_HOST,
-  user: env.MYSQL_USER,
-  password: env.MYSQL_PASSWORD,
-  database: env.MYSQL_DB_NAME,
-  port: env.MYSQL_PORT,
+  host: "sehatmurnisejahtera.com",
+  user: "u187386178_master_ptsms",
+  password: "Demondt0",
+  database: "u187386178_ptsms",
+  port: 3306,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

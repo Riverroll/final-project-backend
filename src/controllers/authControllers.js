@@ -1,6 +1,7 @@
-require("dotenv").config({
-  path: ".env",
-});
+// require("dotenv").config({
+//   path: ".env",
+// });
+require("dotenv").config();
 const { pool, query } = require("../database");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
@@ -56,6 +57,7 @@ module.exports = {
           .status(400)
           .send({ message: "Please insert the required field first" });
       }
+
       const user = await query(
         `SELECT * FROM user WHERE email=${pool.escape(
           identifier
@@ -82,7 +84,11 @@ module.exports = {
 
       const expirationTimestamp = Math.floor(Date.now() / 1000) + expiresIn;
       const currentTime = Math.floor(Date.now() / 1000);
-      const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn });
+      console.log(env.JWT_SECRET);
+      const token = jwt.sign(payload, env.JWT_SECRET || "rahasia", {
+        expiresIn,
+      });
+      console.log(token);
       return res.status(200).send({
         message: "Login Success",
         token,
