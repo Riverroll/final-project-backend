@@ -13,6 +13,7 @@ module.exports = {
       const getTransactionIn = await query(
         `SELECT ti.*,s.supplier_name,s.supplier_code FROM transaction_in as ti
         LEFT JOIN suppliers as s on s.supplier_id = ti.supplier_id
+        ORDER BY ti.created_at DESC
         `
       );
 
@@ -42,6 +43,57 @@ module.exports = {
       return res.status(200).send({
         message: "Get Transaction In Detail Data Success",
         data: getTransactionInDetail,
+      });
+    } catch (error) {
+      console.error("Transaction In Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  insertTransactionIn: async (req, res) => {
+    try {
+      const {
+        noFaktur,
+        note,
+        paymentMethod,
+        productList,
+        supplierId,
+        timeToPayment,
+      } = req.body;
+      const createdDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      const insertTransaction = await query(
+        `INSERT INTO transaction_in (no_faktur, note, payment_method, supplier_id, time_to_payment,created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [noFaktur, note, paymentMethod, supplierId, timeToPayment, createdDate]
+      );
+
+      const transactionId = insertTransaction.insertId;
+
+      // for (let product of productList) {
+      //   await query(
+      //     `INSERT INTO transaction_in_detail (transaction_id, product_name, product_expired, product_qty, product_type, product_brand) VALUES (?, ?, ?, ?, ?, ?)`,
+      //     [
+      //       transactionId,
+      //       product.productName,
+      //       product.productExpired,
+      //       product.productQty,
+      //       product.productType,
+      //       product.productBrand,
+      //     ]
+      //   );
+      // }
+
+      for (let product of productList) {
+        await query(
+          `INSERT INTO transaction_in_detail (transaction_in_id, product_id) VALUES (?, ?)`,
+          [transactionId, product.productName]
+        );
+      }
+
+      return res.status(200).send({
+        message: "Data transaksi masuk berhasil disimpan",
+        data: insertTransaction,
       });
     } catch (error) {
       console.error("Transaction In Detail Error:", error);

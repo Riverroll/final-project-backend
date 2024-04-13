@@ -28,10 +28,34 @@ module.exports = {
       const countTotalSupplier = await query(
         `SELECT COUNT(*) AS totalSupplier FROM suppliers`
       );
+
+      const countTotalTransaction = await query(
+        `SELECT COUNT(*) AS totalTransaction FROM transaction_in`
+      );
+      const countTotalTodayTransaction = await query(
+        `SELECT COUNT(*) AS totalTodayTransaction 
+FROM transaction_in 
+WHERE DATE(created_at) = CURDATE();
+`
+      );
+      const countMostSupplierTransaction = await query(
+        `SELECT suppliers.supplier_name, COUNT(suppliers.supplier_id) AS total_transactions
+FROM transaction_in
+LEFT JOIN suppliers ON suppliers.supplier_id = transaction_in.supplier_id
+GROUP BY transaction_in.supplier_id
+ORDER BY total_transactions DESC
+LIMIT 1;
+`
+      );
+
       return res.status(200).send({
         message: "Get Supplier Data Success",
         data: {
           totalSupplier: countTotalSupplier[0].totalSupplier,
+          todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
+          totalTransaction: countTotalTransaction[0].totalTransaction,
+          mostSupplierTransaction:
+            countMostSupplierTransaction[0].supplier_name,
         },
       });
     } catch (error) {
@@ -44,10 +68,23 @@ module.exports = {
       const masterSupplier = await query(
         `SELECT supplier_id,supplier_name,supplier_code FROM suppliers`
       );
+      const masterProduct = await query(
+        `SELECT product_id,product_name FROM products`
+      );
+
+      const masterProductType = await query(
+        `SELECT product_type_id,type_name FROM product_type`
+      );
+      const masterProductMerk = await query(
+        `SELECT product_merk_id,merk_name FROM product_merk`
+      );
       return res.status(200).send({
         message: "Get Master Dynamic Data Success",
         data: {
           supplier: masterSupplier,
+          product: masterProduct,
+          productType: masterProductType,
+          productMerk: masterProductMerk,
         },
       });
     } catch (error) {
