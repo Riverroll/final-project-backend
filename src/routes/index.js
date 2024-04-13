@@ -3,6 +3,7 @@ const attendanceRouter = require("./attendanceRouter");
 const dataRouter = require("./dataRouter");
 const customerRouter = require("./customerRouter");
 const supplierRouter = require("./supplierRouter");
+const transactionsRouter = require("./transactionsRouter");
 
 module.exports = {
   authRoutes,
@@ -10,4 +11,5 @@ module.exports = {
   dataRouter,
   customerRouter,
   supplierRouter,
+  transactionsRouter,
 };

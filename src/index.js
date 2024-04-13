@@ -4,7 +4,12 @@ require("dotenv").config({
 const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
-const { authRoutes, customerRouter, supplierRouter } = require("./routes");
+const {
+  authRoutes,
+  customerRouter,
+  supplierRouter,
+  transactionsRouter,
+} = require("./routes");
 const { attendanceRouter } = require("./routes");
 const { dataRouter } = require("./routes");
 
@@ -26,6 +31,7 @@ app.use("/api/attendance", attendanceRouter);
 app.use("/api/data", dataRouter);
 app.use("/api/customer", customerRouter);
 app.use("/api/supplier", supplierRouter);
+app.use("/api/transactions", transactionsRouter);
 
 app.get("/api", (req, res) => {
   res.send(`Hello, this is Sehat Murni Sejahtera API`);
