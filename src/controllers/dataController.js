@@ -143,4 +143,42 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+
+  masterTransactionForm: async (req, res) => {
+    try {
+      const masterSupplier = await query(
+        `SELECT supplier_id,supplier_name,supplier_code FROM suppliers`
+      );
+      const masterProduct = await query(
+        `SELECT product_id,product_name,price,stock FROM products`
+      );
+      const masterProductType = await query(
+        `SELECT product_type_id,type_name FROM product_type`
+      );
+      const masterProductMerk = await query(
+        `SELECT product_merk_id,merk_name FROM product_merk`
+      );
+      const masterCustomer = await query(
+        `SELECT customer_id,customer_name FROM customers`
+      );
+      const masterSalesman = await query(
+        `SELECT sales_id,sales_name FROM sales_team`
+      );
+
+      return res.status(200).send({
+        message: "Get Master Transaction Data Success",
+        data: {
+          supplier: masterSupplier,
+          product: masterProduct,
+          productType: masterProductType,
+          productMerk: masterProductMerk,
+          customer: masterCustomer,
+          salesman: masterSalesman,
+        },
+      });
+    } catch (error) {
+      console.error("Master Transaction Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };

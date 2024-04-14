@@ -121,4 +121,81 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+  insertTransactionOut: async (req, res) => {
+    try {
+      const {
+        noFaktur,
+        paymentMethod,
+        productList,
+        customerId,
+        timeToPayment,
+        totalPayment,
+        totalPaymentTax,
+        deliveryDate,
+        note,
+        noPo,
+        salesman,
+      } = req.body;
+
+      if (
+        !noFaktur ||
+        !paymentMethod ||
+        !productList ||
+        !customerId ||
+        !timeToPayment
+      ) {
+        return res
+          .status(400)
+          .send({ message: "All values except 'note' must be filled" });
+      }
+
+      const createdDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      const insertTransaction = await query(
+        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at,delivery_date,amount,amount_tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          noFaktur,
+          noPo,
+          salesman,
+          note,
+          paymentMethod,
+          customerId,
+          timeToPayment,
+          createdDate,
+          deliveryDate,
+          totalPayment,
+          totalPaymentTax,
+        ]
+      );
+
+      const transactionId = insertTransaction.insertId;
+
+      for (let product of productList) {
+        await query(
+          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, qty, discount, ppn, pph, cn, amount,amount_tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            transactionId,
+            product.productName,
+            product.productQty,
+            product.productDisc,
+            product.productPpn,
+            product.productPph,
+            product.productCn,
+            product.productPrice,
+            product.productTotalPrice,
+          ]
+        );
+      }
+
+      return res.status(200).send({
+        message: "Data transaksi keluar berhasil disimpan",
+        data: insertTransaction,
+      });
+    } catch (error) {
+      console.error("Transaction Out Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };
