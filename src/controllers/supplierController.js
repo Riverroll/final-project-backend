@@ -11,7 +11,9 @@ module.exports = {
   all: async (req, res) => {
     try {
       const getSupllier = await query(
-        `SELECT *, supplier_id AS id FROM suppliers;`
+        `SELECT * FROM suppliers
+        ORDER BY created_at DESC
+        `
       );
 
       return res.status(200).send({
@@ -130,6 +132,78 @@ LIMIT 1;
       return res
         .status(500)
         .send({ message: error.message || "Failed to create Distributor" });
+    }
+  },
+  delete: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).send({ message: "ID is required" });
+      }
+
+      const result = await query(
+        `DELETE FROM suppliers WHERE supplier_id = ?`,
+        [id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).send({ message: "Distributor not found" });
+      }
+
+      return res.status(200).send({
+        message: "Distributor deleted successfully",
+        deletedId: id,
+      });
+    } catch (error) {
+      console.error("Delete Distributor Error:", error);
+      return res.status(500).send({ message: "Failed to delete distributor" });
+    }
+  },
+  detail: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getSupllier = await query(
+        `SELECT * FROM suppliers
+        WHERE supplier_id = ${id}
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get Distributor Detail Success",
+        data: getSupllier[0],
+      });
+    } catch (error) {
+      console.error("Distributor Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  update: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { supplierName, supplierCode } = req.body;
+      const uppercaseSupplierCode = supplierCode.toUpperCase();
+      const updatedDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      const updateSupplier = await query(
+        `UPDATE suppliers 
+       SET supplier_name = ?, supplier_code = ? , updated_at = ?
+       WHERE supplier_id = ?`,
+        [supplierName, uppercaseSupplierCode, updatedDate, id]
+      );
+
+      if (updateSupplier.affectedRows === 0) {
+        return res.status(404).send({ message: "Distributor not found" });
+      }
+
+      return res.status(200).send({
+        message: "Distributor updated successfully",
+      });
+    } catch (error) {
+      console.error("Distributor Update Error:", error);
+      res.status(500).send({ message: "Failed to update Distributor" });
     }
   },
 };
