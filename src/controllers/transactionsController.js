@@ -1,7 +1,3 @@
-// require("dotenv").config({
-//   path: ".env",
-// });
-require("dotenv").config();
 const { pool, query } = require("../database");
 const moment = require("moment-timezone");
 
@@ -196,6 +192,59 @@ module.exports = {
     } catch (error) {
       console.error("Transaction Out Detail Error:", error);
       res.status(500).send({ message: error });
+    }
+  },
+  transactionOutDetail: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getTransactionOutDetail = await query(
+        `SELECT 
+        tod.transaction_out_id,
+        tod.transaction_out_detail_id,
+        tod.product_id,
+        tod.discount,
+        tod.qty,
+        tod.ppn,
+        tod.pph,
+        tod.cn,
+        tod.amount,
+        tod.amount_tax,
+        c.customer_name,
+        p.product_name,
+        pt.type_name,
+        pm.merk_name,
+        p.akl_akd,
+        p.price,
+        p.stock,
+        p.expired_date  
+    FROM 
+        transaction_out AS t_out
+    LEFT JOIN 
+        customers AS c ON c.customer_id = t_out.customer_id
+    LEFT JOIN 
+        transaction_out_detail AS tod ON tod.transaction_out_id = t_out.transaction_out_id 
+    LEFT JOIN 
+        products AS p ON p.product_id = tod.product_id 
+    LEFT JOIN 
+        product_type AS pt ON p.product_type = pt.product_type_id 
+    LEFT JOIN 
+        product_merk AS pm ON p.product_merk = pm.product_merk_id
+        WHERE t_out.transaction_out_id = ${id};
+        `
+      );
+      const getTransactionOut = await query(
+        `SELECT * FROM transaction_out WHERE transaction_out_id = ${id}`
+      );
+
+      return res.status(200).send({
+        message: "Get Transaction Out Detail Data Success",
+        data: {
+          transactionOut: getTransactionOut[0],
+          transactionOutDetail: getTransactionOutDetail,
+        },
+      });
+    } catch (error) {
+      console.error("Transaction Out Detail Error:", error);
     }
   },
   transactionOutChrt: async (req, res) => {

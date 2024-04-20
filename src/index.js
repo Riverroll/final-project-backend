@@ -1,6 +1,4 @@
-require("dotenv").config({
-  path: ".env",
-});
+require("dotenv").config({ path: "../.env" });
 const express = require("express");
 const cors = require("cors");
 const { join } = require("path");
@@ -10,12 +8,14 @@ const {
   supplierRouter,
   transactionsRouter,
   productRouter,
+  attendanceRouter,
+  dataRouter,
 } = require("./routes");
-const { attendanceRouter } = require("./routes");
-const { dataRouter } = require("./routes");
 
 const PORT = process.env.PORT || 3000;
+
 const app = express();
+
 app.use(
   cors({
     origin: "*",
@@ -23,7 +23,8 @@ app.use(
   })
 );
 app.use(express.json());
-//#region API ROUTES
+
+// API ROUTES
 // ===========================
 // NOTE : Add your routes here
 
@@ -39,9 +40,18 @@ app.get("/api", (req, res) => {
   res.send(`Hello, this is Sehat Murni Sejahtera API`);
 });
 
-app.get("/api/greetings", (req, res, next) => {
+app.get("/", (req, res, next) => {
   res.status(200).json({
-    message: "Hello, Student !",
+    message: "Hello, this is Sehat Murni Sejahtera API!",
+    availableAPIs: [
+      "/api/auth",
+      "/api/attendance",
+      "/api/data",
+      "/api/customer",
+      "/api/supplier",
+      "/api/transactions",
+      "/api/product",
+    ],
   });
 });
 
@@ -66,8 +76,6 @@ app.use((err, req, res, next) => {
   }
 });
 
-//#endregion
-
 //#region CLIENT
 const clientPath = "../../client/build";
 app.use(express.static(join(__dirname, clientPath)));
@@ -76,8 +84,6 @@ app.use(express.static(join(__dirname, clientPath)));
 app.get("*", (req, res) => {
   res.sendFile(join(__dirname, clientPath, "index.html"));
 });
-
-//#endregion
 
 app.listen(PORT, (err) => {
   if (err) {
