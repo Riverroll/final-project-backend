@@ -1,21 +1,16 @@
-require("dotenv").config();
 const { pool, query } = require("../database");
 const moment = require("moment-timezone");
-
-const env = process.env;
 
 module.exports = {
   all: async (req, res) => {
     try {
-      const getSalesman = await query(
-        `SELECT * FROM sales_team
-        ORDER BY created_at DESC
-        `
+      const getSales = await query(
+        `SELECT * FROM sales_team ORDER BY sales_name ASC`
       );
 
       return res.status(200).send({
         message: "Get Sales Data Success",
-        data: getSalesman,
+        data: getSales,
       });
     } catch (error) {
       console.error("Sales All Error:", error);
@@ -24,111 +19,49 @@ module.exports = {
   },
   master: async (req, res) => {
     try {
-      const countTotalSupplier = await query(
-        `SELECT COUNT(*) AS totalSupplier FROM suppliers`
-      );
-
-      const countTotalTransaction = await query(
-        `SELECT COUNT(*) AS totalTransaction FROM transaction_in`
-      );
-      const countTotalTodayTransaction = await query(
-        `SELECT COUNT(*) AS totalTodayTransaction 
-FROM transaction_in 
-WHERE DATE(created_at) = CURDATE();
-`
-      );
-      const countMostSupplierTransaction = await query(
-        `SELECT suppliers.supplier_name, COUNT(suppliers.supplier_id) AS total_transactions
-FROM transaction_in
-LEFT JOIN suppliers ON suppliers.supplier_id = transaction_in.supplier_id
-GROUP BY transaction_in.supplier_id
-ORDER BY total_transactions DESC
-LIMIT 1;
-`
+      const countTotalSales = await query(
+        `SELECT COUNT(*) AS totalSales FROM sales_team`
       );
 
       return res.status(200).send({
-        message: "Get Supplier Data Success",
+        message: "Get Sales Data Success",
         data: {
-          totalSupplier: countTotalSupplier[0].totalSupplier,
-          todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
-          totalTransaction: countTotalTransaction[0].totalTransaction,
-          mostSupplierTransaction:
-            countMostSupplierTransaction[0].supplier_name,
+          totalSales: countTotalSales[0].totalSales,
         },
       });
     } catch (error) {
-      console.error("Supplier All Error:", error);
-      res.status(500).send({ message: error });
-    }
-  },
-  masterDynamic: async (req, res) => {
-    try {
-      const masterSupplier = await query(
-        `SELECT supplier_id,supplier_name,supplier_code FROM suppliers`
-      );
-      const masterProduct = await query(
-        `SELECT product_id,product_name FROM products`
-      );
-
-      const masterProductType = await query(
-        `SELECT product_type_id,type_name FROM product_type`
-      );
-      const masterProductMerk = await query(
-        `SELECT product_merk_id,merk_name FROM product_merk`
-      );
-      return res.status(200).send({
-        message: "Get Master Dynamic Data Success",
-        data: {
-          supplier: masterSupplier,
-          product: masterProduct,
-          productType: masterProductType,
-          productMerk: masterProductMerk,
-        },
-      });
-    } catch (error) {
-      console.error("Supplier All Error:", error);
+      console.error("Sales All Error:", error);
       res.status(500).send({ message: error });
     }
   },
   create: async (req, res) => {
     try {
-      const { supplierName, supplierCode } = req.body;
+      const { salesName } = req.body;
 
-      const existingSupplier = await query(
-        `SELECT COUNT(*) AS count FROM suppliers WHERE UPPER(supplier_code) = ?`,
-        [supplierCode.toUpperCase()]
-      );
-
-      if (existingSupplier[0].count > 0) {
-        return res
-          .status(400)
-          .send({ message: "Supplier code already exists" });
+      const errors = [];
+      if (!salesName) {
+        errors.push({ field: "name", message: "Name is required" });
       }
-      const uppercaseSupplierCode = supplierCode.toUpperCase();
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+
       const createdDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
 
       const result = await query(
-        `INSERT INTO suppliers (supplier_name, supplier_code, created_at) VALUES (?, ?, ?)`,
-        [supplierName, uppercaseSupplierCode, createdDate]
+        `INSERT INTO sales_team (sales_name, created_at) VALUES (?, ?)`,
+        [salesName, createdDate]
       );
 
       return res.status(200).send({
-        message: "Distributor created successfully",
-        data: {
-          supplierId: result.insertId,
-          supplierName,
-          supplierCode: uppercaseSupplierCode,
-          createdDate,
-        },
+        message: "Sales created successfully",
       });
     } catch (error) {
-      console.error("Create Distributor Error:", error);
-      return res
-        .status(500)
-        .send({ message: error.message || "Failed to create Distributor" });
+      console.error("Sales All Error:", error);
+      res.status(500).send({ message: error });
     }
   },
   delete: async (req, res) => {
@@ -139,68 +72,71 @@ LIMIT 1;
         return res.status(400).send({ message: "ID is required" });
       }
 
-      const result = await query(
-        `DELETE FROM suppliers WHERE supplier_id = ?`,
-        [id]
-      );
+      const result = await query(`DELETE FROM sales_team WHERE sales_id = ?`, [
+        id,
+      ]);
 
       if (result.affectedRows === 0) {
-        return res.status(404).send({ message: "Distributor not found" });
+        return res.status(404).send({ message: "Sales not found" });
       }
 
       return res.status(200).send({
-        message: "Distributor deleted successfully",
-        deletedId: id,
+        message: "Sales deleted successfully",
       });
     } catch (error) {
-      console.error("Delete Distributor Error:", error);
-      return res.status(500).send({ message: "Failed to delete distributor" });
+      console.error("Delete Sales Error:", error);
+      return res.status(500).send({ message: "Failed to delete Sales" });
     }
   },
   detail: async (req, res) => {
     try {
       const { id } = req.params;
-      const getSupllier = await query(
-        `SELECT * FROM suppliers
-        WHERE supplier_id = ${id}
+      const getSales = await query(
+        `SELECT * FROM sales_team
+        WHERE sales_id = ${id}
         `
       );
 
       return res.status(200).send({
-        message: "Get Distributor Detail Success",
-        data: getSupllier[0],
+        message: "Get Sales Detail Success",
+        data: getSales[0],
       });
     } catch (error) {
-      console.error("Distributor Detail Error:", error);
+      console.error("Sales Detail Error:", error);
       res.status(500).send({ message: error });
     }
   },
   update: async (req, res) => {
     try {
       const { id } = req.params;
-      const { supplierName, supplierCode } = req.body;
-      const uppercaseSupplierCode = supplierCode.toUpperCase();
+      const { salesName } = req.body;
       const updatedDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
-
-      const updateSupplier = await query(
-        `UPDATE suppliers 
-       SET supplier_name = ?, supplier_code = ? , updated_at = ?
-       WHERE supplier_id = ?`,
-        [supplierName, uppercaseSupplierCode, updatedDate, id]
+      const errors = [];
+      if (!salesName) {
+        errors.push({ field: "name", message: "Sales Name is required" });
+      }
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+      const updateSales = await query(
+        `UPDATE sales_team 
+       SET sales_name = ? , updated_at = ?
+       WHERE sales_id = ?`,
+        [salesName, updatedDate, id]
       );
 
-      if (updateSupplier.affectedRows === 0) {
-        return res.status(404).send({ message: "Distributor not found" });
+      if (updateSales.affectedRows === 0) {
+        return res.status(404).send({ message: "Sales not found" });
       }
 
       return res.status(200).send({
-        message: "Distributor updated successfully",
+        message: "Sales updated successfully",
       });
     } catch (error) {
-      console.error("Distributor Update Error:", error);
-      res.status(500).send({ message: "Failed to update Distributor" });
+      console.error("Sales Update Error:", error);
+      res.status(500).send({ message: "Failed to update Sales" });
     }
   },
 };
