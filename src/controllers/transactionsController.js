@@ -198,4 +198,28 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+  transactionOutChrt: async (req, res) => {
+    try {
+      const getTransactionIn = await query(
+        `SELECT
+        MONTH(created_at) AS month,
+        COUNT(*) AS transaction_count
+      FROM
+        transaction_out
+      GROUP BY
+        MONTH(created_at)
+      ORDER BY
+        MONTH(created_at);
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get All Transaction In Data Success",
+        data: getTransactionIn,
+      });
+    } catch (error) {
+      console.error("All Transaction In Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };
