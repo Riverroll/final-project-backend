@@ -10,6 +10,7 @@ const {
   productRouter,
   attendanceRouter,
   dataRouter,
+  salesRouter,
 } = require("./routes");
 
 const PORT = process.env.PORT || 3000;
@@ -35,6 +36,7 @@ app.use("/api/customer", customerRouter);
 app.use("/api/supplier", supplierRouter);
 app.use("/api/transactions", transactionsRouter);
 app.use("/api/product", productRouter);
+app.use("/api/sales", salesRouter);
 
 app.get("/api", (req, res) => {
   res.send(`Hello, this is Sehat Murni Sejahtera API`);
