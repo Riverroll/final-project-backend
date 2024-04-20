@@ -7,18 +7,18 @@ const env = process.env;
 module.exports = {
   all: async (req, res) => {
     try {
-      const getSupllier = await query(
-        `SELECT * FROM suppliers
+      const getSalesman = await query(
+        `SELECT * FROM sales_team
         ORDER BY created_at DESC
         `
       );
 
       return res.status(200).send({
-        message: "Get Supplier Data Success",
-        data: getSupllier,
+        message: "Get Sales Data Success",
+        data: getSalesman,
       });
     } catch (error) {
-      console.error("Supplier All Error:", error);
+      console.error("Sales All Error:", error);
       res.status(500).send({ message: error });
     }
   },

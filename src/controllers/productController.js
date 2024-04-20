@@ -255,4 +255,253 @@ LIMIT 1;
       res.status(500).send({ message: error });
     }
   },
+  allType: async (req, res) => {
+    try {
+      const getProductype = await query(`SELECT * FROM product_type
+      ORDER BY created_at DESC
+      `);
+
+      return res.status(200).send({
+        message: "Get Products Type Data Success",
+        data: getProductype,
+      });
+    } catch (error) {
+      console.error("Products Type All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  createType: async (req, res) => {
+    try {
+      const { typeName } = req.body;
+
+      const errors = [];
+      if (!typeName) {
+        errors.push({ field: "name", message: "Name is required" });
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+
+      const createdDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      const result = await query(
+        `INSERT INTO product_type (type_name, created_at) VALUES (?, ?)`,
+        [typeName, createdDate]
+      );
+
+      return res.status(200).send({
+        message: "Product Type created successfully",
+      });
+    } catch (error) {
+      console.error("Product Type All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  detailType: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getProductype = await query(
+        `SELECT * FROM product_type
+        WHERE product_type_id = ${id}
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get Product Type Detail Success",
+        data: getProductype[0],
+      });
+    } catch (error) {
+      console.error("Product Type Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  updateType: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { typeName } = req.body;
+      const updatedDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+      const errors = [];
+      if (!typeName) {
+        errors.push({
+          field: "name",
+          message: "Product Type Name is required",
+        });
+      }
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+      const updateProductType = await query(
+        `UPDATE product_type 
+       SET type_name = ? , updated_at = ?
+       WHERE product_type_id = ?`,
+        [typeName, updatedDate, id]
+      );
+
+      if (updateProductType.affectedRows === 0) {
+        return res.status(404).send({ message: "Product Type not found" });
+      }
+
+      return res.status(200).send({
+        message: "Product Type updated successfully",
+      });
+    } catch (error) {
+      console.error("Product Type Update Error:", error);
+      res.status(500).send({ message: "Failed to update Product Type" });
+    }
+  },
+  deleteType: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).send({ message: "ID is required" });
+      }
+
+      const result = await query(
+        `DELETE FROM product_type WHERE product_type_id = ?`,
+        [id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).send({ message: "Product Type not found" });
+      }
+
+      return res.status(200).send({
+        message: "Product Type deleted successfully",
+        deletedId: id,
+      });
+    } catch (error) {
+      console.error("Delete Product Type Error:", error);
+      return res.status(500).send({ message: "Failed to delete Product Type" });
+    }
+  },
+  allMerk: async (req, res) => {
+    try {
+      const getProducMerk = await query(`SELECT * FROM product_merk
+      ORDER BY created_at DESC
+      `);
+
+      return res.status(200).send({
+        message: "Get Products Merk Data Success",
+        data: getProducMerk,
+      });
+    } catch (error) {
+      console.error("Products Merk All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  createMerk: async (req, res) => {
+    try {
+      const { merkName } = req.body;
+
+      const errors = [];
+      if (!merkName) {
+        errors.push({ field: "name", message: "Name is required" });
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+
+      const createdDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      const result = await query(
+        `INSERT INTO product_merk (merk_name, created_at) VALUES (?, ?)`,
+        [merkName, createdDate]
+      );
+
+      return res.status(200).send({
+        message: "Product Merk created successfully",
+      });
+    } catch (error) {
+      console.error("Product Merk All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  detailMerk: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getProductMerk = await query(
+        `SELECT * FROM product_merk
+        WHERE product_merk_id = ${id}
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get Product Merk Detail Success",
+        data: getProductMerk[0],
+      });
+    } catch (error) {
+      console.error("Product Merk Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  updateMerk: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { merkName } = req.body;
+      const updatedDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+      const errors = [];
+      if (!merkName) {
+        errors.push({
+          field: "name",
+          message: "Product Merk Name is required",
+        });
+      }
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+      const updateProductMerk = await query(
+        `UPDATE product_merk
+       SET merk_name = ? , updated_at = ?
+       WHERE product_merk_id = ?`,
+        [merkName, updatedDate, id]
+      );
+
+      if (updateProductMerk.affectedRows === 0) {
+        return res.status(404).send({ message: "Product Merk not found" });
+      }
+      return res.status(200).send({
+        message: "Product Merk updated successfully",
+      });
+    } catch (error) {
+      console.error("Product Merk Update Error:", error);
+      res.status(500).send({ message: "Failed to update Product Merk" });
+    }
+  },
+  deleteMerk: async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!id) {
+        return res.status(400).send({ message: "ID is required" });
+      }
+
+      const result = await query(
+        `DELETE FROM product_merk WHERE product_merk_id = ?`,
+        [id]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).send({ message: "Product Merk not found" });
+      }
+
+      return res.status(200).send({
+        message: "Product Merk deleted successfully",
+        deletedId: id,
+      });
+    } catch (error) {
+      console.error("Delete Product Merk Error:", error);
+      return res.status(500).send({ message: "Failed to delete Product Type" });
+    }
+  },
 };
