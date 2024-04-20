@@ -1,6 +1,3 @@
-// require("dotenv").config({
-//   path: ".env",
-// });
 require("dotenv").config();
 const { pool, query } = require("../database");
 
@@ -53,6 +50,18 @@ WHERE DATE(created_at) = CURDATE() AND customer_id = ${id};
           todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
           totalTransaction: countTotalTransaction[0].totalTransaction,
         },
+      });
+    } catch (error) {
+      console.error("Customer All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  insertCustomer: async (req, res) => {
+    try {
+      const { customerName } = req.body;
+      let insertQuery = `INSERT INTO * FROM customers WHERE customer_name = '${customerName}'`;
+      return res.status(200).send({
+        message: "Get Customer Data Success",
       });
     } catch (error) {
       console.error("Customer All Error:", error);
