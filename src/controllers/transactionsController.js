@@ -247,24 +247,80 @@ module.exports = {
       console.error("Transaction Out Detail Error:", error);
     }
   },
-  transactionOutChrt: async (req, res) => {
+  transactionReport: async (req, res) => {
     try {
-      const getTransactionIn = await query(
+      const transactionOutData = await query(
         `SELECT
-        MONTH(created_at) AS month,
-        COUNT(*) AS transaction_count
-      FROM
-        transaction_out
-      GROUP BY
-        MONTH(created_at)
-      ORDER BY
-        MONTH(created_at);
+    all_months.month AS month,
+    COUNT(transaction_out.created_at) AS transaction_count
+FROM
+    (
+        SELECT 1 AS month UNION ALL
+        SELECT 2 UNION ALL
+        SELECT 3 UNION ALL
+        SELECT 4 UNION ALL
+        SELECT 5 UNION ALL
+        SELECT 6 UNION ALL
+        SELECT 7 UNION ALL
+        SELECT 8 UNION ALL
+        SELECT 9 UNION ALL
+        SELECT 10 UNION ALL
+        SELECT 11 UNION ALL
+        SELECT 12
+    ) AS all_months
+LEFT JOIN transaction_out ON MONTH(transaction_out.created_at) = all_months.month
+GROUP BY
+    all_months.month
+ORDER BY
+    all_months.month;
         `
       );
 
+      const transactionInData = await query(
+        `SELECT
+        all_months.month AS month,
+        COUNT(transaction_in.created_at) AS transaction_count
+      FROM
+        (
+          SELECT 1 AS month UNION ALL
+          SELECT 2 UNION ALL
+          SELECT 3 UNION ALL
+          SELECT 4 UNION ALL
+          SELECT 5 UNION ALL
+          SELECT 6 UNION ALL
+          SELECT 7 UNION ALL
+          SELECT 8 UNION ALL
+          SELECT 9 UNION ALL
+          SELECT 10 UNION ALL
+          SELECT 11 UNION ALL
+          SELECT 12
+        ) AS all_months
+      LEFT JOIN transaction_in ON MONTH(transaction_in.created_at) = all_months.month
+      GROUP BY
+        all_months.month
+      ORDER BY
+        all_months.month;
+      `
+      );
+
+      const transactionCountByMonthIn = new Array(12).fill(0);
+
+      transactionInData.forEach((transaction) => {
+        const monthIndex = transaction.month - 1;
+        transactionCountByMonthIn[monthIndex] = transaction.transaction_count;
+      });
+      const transactionCountByMonthOut = new Array(12).fill(0);
+
+      transactionOutData.forEach((transaction) => {
+        const monthIndex = transaction.month - 1;
+        transactionCountByMonthOut[monthIndex] = transaction.transaction_count;
+      });
       return res.status(200).send({
-        message: "Get All Transaction In Data Success",
-        data: getTransactionIn,
+        message: "Get All Transaction  Data Success",
+        data: {
+          transactionIn: transactionCountByMonthIn,
+          transactionOut: transactionCountByMonthOut,
+        },
       });
     } catch (error) {
       console.error("All Transaction In Error:", error);

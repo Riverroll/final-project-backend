@@ -181,4 +181,33 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+  dataOperasionalDashboard: async (req, res) => {
+    try {
+      const countTotalProduct = await query(
+        `SELECT COUNT(*) AS totalProduct FROM products`
+      );
+      const countTotalSupplier = await query(
+        `SELECT COUNT(*) AS totalSupplier FROM suppliers`
+      );
+      const countTotalTransactionIn = await query(
+        `SELECT COUNT(*) AS totalTransactionIn FROM transaction_in`
+      );
+      const countTotalTransactionOut = await query(
+        `SELECT COUNT(*) AS totalTransactionOut FROM transaction_out`
+      );
+
+      return res.status(200).send({
+        message: "Get Dashboard Data Success",
+        data: {
+          totalProduct: countTotalProduct[0].totalProduct,
+          totalSupplier: countTotalSupplier[0].totalSupplier,
+          totalTransactionIn: countTotalTransactionIn[0].totalTransactionIn,
+          totalTransactionOut: countTotalTransactionOut[0].totalTransactionOut,
+        },
+      });
+    } catch (error) {
+      console.error("Dashboard Error:", error);
+      res.status(500).send({ message: "Internal Server Error" });
+    }
+  },
 };
