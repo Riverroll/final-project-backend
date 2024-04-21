@@ -88,7 +88,6 @@ module.exports = {
       const token = jwt.sign(payload, env.JWT_SECRET || "rahasia", {
         expiresIn,
       });
-      console.log(token);
       return res.status(200).send({
         message: "Login Success",
         token,
@@ -97,6 +96,7 @@ module.exports = {
           name: user[0].name,
           email: user[0].email,
           isAdmin: user[0].isAdmin,
+          role_id: user[0].role_id,
           expToken: expirationTimestamp,
         },
       });
