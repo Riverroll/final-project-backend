@@ -212,6 +212,7 @@ module.exports = {
           name: user[0].name,
           email: user[0].email,
           isAdmin: user[0].isAdmin,
+          role_id: user[0].role_id,
         },
       });
     } catch (error) {
