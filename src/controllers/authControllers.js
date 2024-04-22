@@ -220,4 +220,32 @@ module.exports = {
       res.status(500).send({ message: "Internal Server Error" });
     }
   },
+  allUser: async (req, res) => {
+    try {
+      const getUser = await query(
+        `SELECT user.*, roles.name as role_name FROM user LEFT JOIN roles ON roles.role_id = user.role_id ORDER BY name ASC`
+      );
+
+      return res.status(200).send({
+        message: "Get User Data Success",
+        data: getUser,
+      });
+    } catch (error) {
+      console.error("User All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  allRole: async (req, res) => {
+    try {
+      const getRole = await query(`SELECT * FROM roles ORDER BY name ASC`);
+
+      return res.status(200).send({
+        message: "Get Role Data Success",
+        data: getRole,
+      });
+    } catch (error) {
+      console.error("Role All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };
