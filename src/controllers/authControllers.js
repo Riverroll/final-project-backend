@@ -35,7 +35,7 @@ module.exports = {
       const hashedPassword = await bcrypt.hash(password, 10);
 
       await query(`
-        INSERT INTO user (name, email, password, isAdmin)
+        INSERT INTO user (name, email, password, role_id)
         VALUES (${pool.escape(name)}, ${pool.escape(email)}, ${pool.escape(
         hashedPassword
       )}, ${pool.escape(role)})
@@ -47,7 +47,6 @@ module.exports = {
       res.status(500).send({ message: "Internal Server Error" });
     }
   },
-
   login: async (req, res) => {
     try {
       const { identifier, password } = req.body;

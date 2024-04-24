@@ -206,4 +206,28 @@ module.exports = {
       res.status(500).json({ message: "Failed to save data on the server" });
     }
   },
+  all: async (req, res) => {
+    try {
+      const { user_id, role_id } = req.body;
+      let getAttendanceData;
+      if (role_id == 1) {
+        getAttendanceData = await query(
+          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id `
+        );
+      } else {
+        getAttendanceData = await query(
+          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id WHERE attendance.user_id = ${pool.escape(
+            user_id
+          )}`
+        );
+      }
+      return res.status(200).send({
+        message: "Get User Attendance Success",
+        data: getAttendanceData,
+      });
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(error.status || 500).send(error);
+    }
+  },
 };
