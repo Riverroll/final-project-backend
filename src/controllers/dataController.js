@@ -210,4 +210,93 @@ module.exports = {
       res.status(500).send({ message: "Internal Server Error" });
     }
   },
+  dataMarketingDashboard: async (req, res) => {
+    try {
+      const { role_id, user_id } = req.body;
+
+      let responseData;
+
+      if (role_id == 1) {
+        const totalUserQuery = "SELECT COUNT(*) AS totalUsers FROM user";
+        const totalUserResult = await query(totalUserQuery);
+
+        const totalAttendanceQuery =
+          "SELECT COUNT(*) AS totalAttendance FROM attendance";
+        const totalAttendanceResult = await query(totalAttendanceQuery);
+
+        const today = new Date().toISOString().split("T")[0];
+        const todayAttendanceQuery = `SELECT COUNT(*) AS todayAttendance FROM attendance WHERE DATE(date) = '${today}'`;
+        const todayAttendanceResult = await query(todayAttendanceQuery);
+
+        const mostFrequentUserQuery = `
+          SELECT u.name, COUNT(a.user_id) AS attendanceCount
+          FROM user u
+          LEFT JOIN attendance a ON u.user_id = a.user_id
+          GROUP BY u.user_id
+          ORDER BY attendanceCount DESC
+          LIMIT 1
+        `;
+        const mostFrequentUserResult = await query(mostFrequentUserQuery);
+
+        responseData = {
+          totalUsers: totalUserResult[0].totalUsers,
+          totalAttendance: totalAttendanceResult[0].totalAttendance,
+          todayAttendance: todayAttendanceResult[0].todayAttendance,
+          mostFrequentUser: mostFrequentUserResult[0],
+        };
+      } else {
+        // Non-admin logic to get data based on user_id
+        const totalAttendanceQuery = `SELECT COUNT(*) AS totalAttendance FROM attendance WHERE user_id = ${pool.escape(
+          user_id
+        )}`;
+        const totalAttendanceResult = await query(totalAttendanceQuery);
+
+        const lastAttendanceQuery = `SELECT MAX(date) AS lastAttendance FROM attendance WHERE user_id = ${pool.escape(
+          user_id
+        )}`;
+        const lastAttendanceResult = await query(lastAttendanceQuery);
+
+        const today = new Date().toISOString().split("T")[0];
+        const todayAttendanceQuery = `SELECT COUNT(*) AS todayAttendance FROM attendance WHERE user_id = ${pool.escape(
+          user_id
+        )} AND DATE(date) = '${today}'`;
+        const todayAttendanceResult = await query(todayAttendanceQuery);
+
+        const lastLocationQuery = `SELECT location_lat as latitude,location_long as longitude FROM attendance WHERE user_id = ${pool.escape(
+          user_id
+        )} ORDER BY date DESC LIMIT 1`;
+        const lastLocationResult = await query(lastLocationQuery);
+
+        responseData = {
+          totalAttendance: totalAttendanceResult[0].totalAttendance,
+          lastAttendance: lastAttendanceResult[0].lastAttendance,
+          todayAttendance: todayAttendanceResult[0].todayAttendance,
+          lastLocation: lastLocationResult[0],
+        };
+      }
+
+      return res.status(200).send({
+        message: "Get Dashboard Data Success",
+        data: responseData,
+      });
+    } catch (error) {
+      console.error("Dashboard Error:", error);
+      res.status(500).send({ message: "Internal Server Error" });
+    }
+  },
+  masterUser: async (req, res) => {
+    try {
+      const masterRole = await query(`SELECT * FROM roles`);
+
+      return res.status(200).send({
+        message: "Get Master User Data Success",
+        data: {
+          roles: masterRole,
+        },
+      });
+    } catch (error) {
+      console.error("Master User Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };
