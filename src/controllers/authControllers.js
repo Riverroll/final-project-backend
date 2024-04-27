@@ -104,7 +104,7 @@ module.exports = {
       res.status(500).json({ error: "Internal Server Error" });
     }
   },
-  editUser: async (req, res) => {
+  editUserLate: async (req, res) => {
     try {
       const { user_id, name, email, password, isAdmin } = req.body;
       const user = await query(
@@ -168,11 +168,11 @@ module.exports = {
   },
   deleteUser: async (req, res) => {
     try {
-      const { user_id } = req.params;
+      const { id } = req.params;
 
       // Perhatikan bahwa kita memerlukan ID pengguna untuk mengidentifikasi pengguna yang akan dihapus
       const user = await query(
-        `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
+        `SELECT * FROM user WHERE user_id=${pool.escape(id)}`
       );
 
       if (user.length === 0) {
@@ -180,7 +180,7 @@ module.exports = {
       }
 
       // Lakukan penghapusan dari database
-      await query(`DELETE FROM user WHERE user_id=${pool.escape(user_id)}`);
+      await query(`DELETE FROM user WHERE user_id=${pool.escape(id)}`);
 
       // Kirim respons bahwa penghapusan berhasil
       return res.status(200).send({ message: "User deleted successfully" });
@@ -245,6 +245,111 @@ module.exports = {
     } catch (error) {
       console.error("Role All Error:", error);
       res.status(500).send({ message: error });
+    }
+  },
+  detailUser: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getUser = await query(
+        `SELECT * FROM user
+        WHERE user_id = ${id}
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get User Detail Success",
+        data: getUser[0],
+      });
+    } catch (error) {
+      console.error("User Detail Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  editUser: async (req, res) => {
+    try {
+      const { user_id, name, email, role_id } = req.body;
+      const user = await query(
+        `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
+      );
+
+      if (user.length === 0) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
+      // const existingEmail = await query(
+      //   `SELECT * FROM user WHERE email=${pool.escape(email)}`
+      // );
+
+      // if (existingEmail.length > 0) {
+      //   return res.status(400).send({ message: "Email is already registered" });
+      // }
+
+      // const existingUsername = await query(
+      //   `SELECT * FROM user WHERE name=${pool.escape(name)}`
+      // );
+
+      // if (existingUsername.length > 0) {
+      //   return res
+      //     .status(400)
+      //     .send({ message: "Username is already registered" });
+      // }
+
+      if (name !== undefined) {
+        user[0].name = name;
+      }
+
+      if (email !== undefined) {
+        user[0].email = email;
+      }
+
+      if (role_id !== undefined) {
+        user[0].role_id = role_id;
+      }
+
+      await query(
+        `UPDATE user SET name=${pool.escape(user[0].name)}, email=${pool.escape(
+          user[0].email
+        )}, password=${pool.escape(user[0].password)}, role_id=${pool.escape(
+          user[0].role_id
+        )} WHERE user_id=${pool.escape(user_id)}`
+      );
+
+      return res.status(200).send({ message: "User updated successfully" });
+    } catch (error) {
+      console.error("Edit User Error:", error);
+      res.status(500).send({ message: "Internal Server Error" });
+    }
+  },
+  resetPasswordUser: async (req, res) => {
+    try {
+      const { id, password } = req.body;
+      const user = await query(
+        `SELECT * FROM user WHERE user_id=${pool.escape(id)}`
+      );
+
+      if (user.length === 0) {
+        return res.status(404).send({ message: "User not found" });
+      }
+
+      if (password !== undefined) {
+        if (password !== user[0].password) {
+          const hashedPassword = await bcrypt.hash(password, 10);
+          user[0].password = hashedPassword;
+        }
+      }
+
+      await query(
+        `UPDATE user SET password=${pool.escape(
+          user[0].password
+        )}  WHERE user_id=${pool.escape(id)}`
+      );
+
+      return res
+        .status(200)
+        .send({ message: "Reset Password User successfully" });
+    } catch (error) {
+      console.error("Reset Password User Error:", error);
+      res.status(500).send({ message: "Internal Server Error" });
     }
   },
 };
