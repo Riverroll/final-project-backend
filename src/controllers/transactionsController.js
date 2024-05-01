@@ -7,8 +7,9 @@ module.exports = {
   transactionInList: async (req, res) => {
     try {
       const getTransactionIn = await query(
-        `SELECT ti.*,s.supplier_name,s.supplier_code FROM transaction_in as ti
+        `SELECT ti.*,s.supplier_name,s.supplier_code,u.name FROM transaction_in as ti
         LEFT JOIN suppliers as s on s.supplier_id = ti.supplier_id
+        LEFT JOIN user as u on u.user_id = ti.pic
         ORDER BY ti.created_at DESC
         `
       );
@@ -25,20 +26,45 @@ module.exports = {
   transactionInDetail: async (req, res) => {
     try {
       const { id } = req.params;
-      const getTransactionInDetail = await query(
-        `SELECT tid.transaction_in_id,tid.transaction_in_detail_id,s.supplier_name,s.supplier_code,p.product_name ,pt.type_name ,pm.merk_name,p.akl_akd,p.price ,p.stock,p.expired_date  FROM transaction_in as ti
-        LEFT JOIN suppliers s on s.supplier_id = ti.supplier_id
-        LEFT JOIN transaction_in_detail  tid on tid.transaction_in_id = ti.transaction_in_id 
-        LEFT JOIN products p on p.product_id = tid.product_id 
-        LEFT JOIN product_type pt on p.product_type = pt.product_type_id 
-        LEFT JOIN product_merk pm on p.product_merk = pm.product_merk_id 
-        WHERE tid.transaction_in_id = ${id}
-        `
+      const getTransactionInDetail = await query(`
+      SELECT 
+        tid.transaction_in_id,
+        tid.transaction_in_detail_id,
+        s.supplier_name,
+        s.supplier_code,
+        p.product_name,
+        pt.type_name,
+        pm.merk_name,
+        p.akl_akd,
+        tid.quantity,
+        tid.price,
+        tid.product_id,
+        pe.expired_date
+      FROM transaction_in as ti
+      LEFT JOIN suppliers s ON s.supplier_id = ti.supplier_id
+      LEFT JOIN transaction_in_detail tid ON tid.transaction_in_id = ti.transaction_in_id 
+      LEFT JOIN products p ON p.product_id = tid.product_id 
+      LEFT JOIN product_type pt ON p.product_type = pt.product_type_id 
+      LEFT JOIN product_merk pm ON p.product_merk = pm.product_merk_id 
+      LEFT JOIN (
+        SELECT product_id, MAX(expired_date) AS expired_date
+        FROM product_expired
+        WHERE transaction_in_id = ${id}
+        GROUP BY product_id
+      ) pe ON p.product_id = pe.product_id
+      WHERE tid.transaction_in_id = ${id}
+    `);
+
+      const getTransactionIn = await query(
+        `SELECT transaction_in.*,suppliers.supplier_name,suppliers.supplier_code FROM transaction_in LEFT JOIN suppliers ON suppliers.supplier_id = transaction_in.supplier_id WHERE transaction_in_id = ${id}`
       );
 
       return res.status(200).send({
         message: "Get Transaction In Detail Data Success",
-        data: getTransactionInDetail,
+        data: {
+          transactionIn: getTransactionIn[0],
+          transactionInDetail: getTransactionInDetail,
+        },
       });
     } catch (error) {
       console.error("Transaction In Detail Error:", error);
@@ -53,39 +79,115 @@ module.exports = {
         paymentMethod,
         productList,
         supplierId,
+        tax,
         timeToPayment,
+        userId,
       } = req.body;
       const createdDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
 
+      const errors = [];
+      if (!noFaktur) {
+        errors.push({ field: "noFaktur", message: "Faktur is required" });
+      }
+      if (!supplierId) {
+        errors.push({ field: "supplierId", message: "Supplier is required" });
+      }
+      if (!paymentMethod) {
+        errors.push({
+          field: "paymentMethod",
+          message: "Payment Method is required",
+        });
+      }
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+
+      let amount = 0;
+
+      // Memulai transaksi
+      await query("START TRANSACTION");
+
+      // Insert data ke dalam tabel transaction_in
       const insertTransaction = await query(
-        `INSERT INTO transaction_in (no_faktur, note, payment_method, supplier_id, time_to_payment,created_at) VALUES (?, ?, ?, ?, ?, ?)`,
-        [noFaktur, note, paymentMethod, supplierId, timeToPayment, createdDate]
+        `INSERT INTO transaction_in (no_faktur, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          noFaktur,
+          note,
+          paymentMethod,
+          amount,
+          supplierId,
+          timeToPayment,
+          createdDate,
+          tax,
+          userId,
+        ]
       );
 
       const transactionId = insertTransaction.insertId;
 
-      // for (let product of productList) {
-      //   await query(
-      //     `INSERT INTO transaction_in_detail (transaction_id, product_name, product_expired, product_qty, product_type, product_brand) VALUES (?, ?, ?, ?, ?, ?)`,
-      //     [
-      //       transactionId,
-      //       product.productName,
-      //       product.productExpired,
-      //       product.productQty,
-      //       product.productType,
-      //       product.productBrand,
-      //     ]
-      //   );
-      // }
-
       for (let product of productList) {
-        await query(
-          `INSERT INTO transaction_in_detail (transaction_in_id, product_id) VALUES (?, ?)`,
-          [transactionId, product.productName]
+        // Ambil harga dari produk
+        const productData = await query(
+          `SELECT price, stock, isExpired FROM products WHERE product_id = ?`,
+          [product.product_id]
         );
+
+        if (productData.length === 0) {
+          await query("ROLLBACK");
+          return res.status(404).send({
+            message: `Product not found for product ID ${product.product_id}`,
+          });
+        }
+
+        const price = productData[0].price;
+        const totalPrice = price * product.quantity;
+
+        // Tambahkan total harga produk ke dalam amount
+        amount += totalPrice;
+
+        // Masukkan nilai price ke dalam tabel transaction_in_detail
+        await query(
+          `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity) VALUES (?, ?, ?, ?)`,
+          [transactionId, product.product_id, price, product.quantity]
+        );
+
+        if (productData[0].isExpired == 1) {
+          await query(
+            `INSERT INTO product_expired (transaction_in_id, product_id, expired_date, quantity) VALUES (?, ?, ?, ?)`,
+            [
+              transactionId,
+              product.product_id,
+              product.expired_date,
+              product.quantity,
+            ]
+          );
+
+          // Kurangi stok di tabel products berdasarkan product_id dan quantity
+          await query(
+            `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
+            [product.quantity, product.product_id]
+          );
+        } else {
+          await query(
+            `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
+            [product.quantity, product.product_id]
+          );
+        }
       }
+
+      // Hitung nilai amount_tax
+      const amountTax = amount + amount * (tax / 100);
+
+      // Update amount dan amount_tax di dalam tabel transaction_in
+      await query(
+        `UPDATE transaction_in SET amount = ?, amount_tax = ? WHERE transaction_in_id = ?`,
+        [amount, amountTax, transactionId]
+      );
+
+      // Commit transaksi
+      await query("COMMIT");
 
       return res.status(200).send({
         message: "Data transaksi masuk berhasil disimpan",
@@ -93,16 +195,261 @@ module.exports = {
       });
     } catch (error) {
       console.error("Transaction In Detail Error:", error);
+      await query("ROLLBACK");
       res.status(500).send({ message: error });
     }
   },
+  updateTransactionIn: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        noFaktur,
+        note,
+        paymentMethod,
+        productList,
+        supplierId,
+        tax,
+        timeToPayment,
+      } = req.body;
+      const updatedDate = moment
+        .tz("Asia/Jakarta")
+        .format("YYYY-MM-DD HH:mm:ss");
+
+      // Ambil data transaction_in_detail berdasarkan transaction_in_id
+      const transactionDetails = await query(
+        `SELECT transaction_in_detail.*,products.*  FROM transaction_in_detail LEFT JOIN products ON transaction_in_detail.product_id = products.product_id WHERE transaction_in_id = ?`,
+        [id]
+      );
+
+      // Bandingkan dengan productList
+      for (const transactionDetail of transactionDetails) {
+        const productInList = productList.find(
+          (product) => product.product_id === transactionDetail.product_id
+        );
+
+        // Jika produk tidak ada dalam productList
+        if (!productInList) {
+          // Hapus data transaction_in_detail
+          await query(
+            `DELETE FROM transaction_in_detail WHERE transaction_in_detail_id = ?`,
+            [transactionDetail.transaction_in_detail_id]
+          );
+
+          // Periksa isExpired
+          if (transactionDetail.isExpired == 1) {
+            // Hapus data dari product_expired
+            await query(
+              `DELETE FROM product_expired WHERE transaction_in_id = ? AND product_id = ?`,
+              [id, transactionDetail.product_id]
+            );
+
+            // Hitung total quantity di product_expired
+            const totalExpiredQuantity = await query(
+              `SELECT COALESCE(SUM(quantity), 0) AS total_quantity FROM product_expired WHERE product_id = ?`,
+              [transactionDetail.product_id]
+            );
+
+            // Update stok di table products berdasarkan total quantity di product_expired
+            await query(`UPDATE products SET stock = ? WHERE product_id = ?`, [
+              totalExpiredQuantity[0].total_quantity,
+              transactionDetail.product_id,
+            ]);
+          } else {
+            // Update stok di table products berdasarkan quantity yang ada di transaction_in_detail
+            await query(
+              `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
+              [transactionDetail.quantity, transactionDetail.product_id]
+            );
+            // Hapus data transaction_in_detail
+            await query(
+              `DELETE FROM transaction_in_detail WHERE transaction_in_detail_id = ?`,
+              [transactionDetail.transaction_in_detail_id]
+            );
+          }
+        } else {
+          // Jika produk ada dalam productList
+          // Periksa perubahan quantity
+          if (productInList.quantity !== transactionDetail.quantity) {
+            // Kurangi stok lama di table products
+            await query(
+              `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
+              [transactionDetail.quantity, transactionDetail.product_id]
+            );
+
+            // Update stok baru di table products
+            await query(
+              `UPDATE products SET stock = IFNULL(stock, 0) + ? WHERE product_id = ?`,
+              [productInList.quantity, transactionDetail.product_id]
+            );
+
+            await query(
+              `UPDATE transaction_in_detail SET quantity = ? WHERE product_id = ? AND transaction_in_id = ?`,
+              [
+                parseInt(productInList.quantity),
+                transactionDetail.product_id,
+                id,
+              ]
+            );
+
+            // Periksa isExpired
+            if (transactionDetail.isExpired == 1) {
+              // Update quantity di product_expired
+              await query(
+                `UPDATE product_expired SET quantity = ? WHERE transaction_in_id = ? AND product_id = ?`,
+                [productInList.quantity, id, transactionDetail.product_id]
+              );
+
+              // Hitung total quantity di product_expired
+              const totalExpiredQuantity = await query(
+                `SELECT SUM(quantity) AS total_quantity FROM product_expired WHERE product_id = ?`,
+                [transactionDetail.product_id]
+              );
+              // Update stok di table products berdasarkan total quantity di product_expired
+              await query(
+                `UPDATE products SET stock = ? WHERE product_id = ?`,
+                [
+                  totalExpiredQuantity[0].total_quantity,
+                  transactionDetail.product_id,
+                ]
+              );
+            }
+          }
+        }
+      }
+
+      // Cek jika ada produk baru dalam productList
+      for (const productInList of productList) {
+        const existingProduct = await query(
+          `SELECT * FROM transaction_in_detail WHERE transaction_in_id = ? AND product_id = ?`,
+          [id, productInList.product_id]
+        );
+        console.log(existingProduct, "cek product");
+        // Jika produk belum ada dalam transaction_in_detail
+        if (!existingProduct.length) {
+          console.log(productInList);
+          // Tambahkan produk baru ke transaction_in_detail
+          const productInfo = await query(
+            `SELECT price,isExpired FROM products WHERE product_id = ?`,
+            [productInList.product_id]
+          );
+          console.log(productInfo);
+
+          await query(
+            `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity) VALUES (?, ?, ?, ?)`,
+            [
+              id,
+              productInList.product_id,
+              productInfo[0].price,
+              productInList.quantity,
+            ]
+          );
+
+          // Periksa isExpired
+          if (productInfo[0].isExpired == 1) {
+            // Insert ke product_expired
+            await query(
+              `INSERT INTO product_expired (transaction_in_id, product_id, expired_date, quantity) VALUES (?, ?, ?, ?)`,
+              [
+                id,
+                productInList.product_id,
+                productInList.expired_date,
+                productInList.quantity,
+              ]
+            );
+
+            // Hitung total quantity di product_expired
+            const totalExpiredQuantity = await query(
+              `SELECT SUM(quantity) AS total_quantity FROM product_expired WHERE product_id = ?`,
+              [productInList.product_id]
+            );
+            console.log(totalExpiredQuantity);
+            // Update stok di table products berdasarkan total quantity di product_expired
+            await query(`UPDATE products SET stock = ? WHERE product_id = ?`, [
+              totalExpiredQuantity[0].total_quantity,
+              productInList.product_id,
+            ]);
+          } else {
+            // Update stok di table products berdasarkan quantity baru
+            await query(
+              `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
+              [productInList.quantity, productInList.product_id]
+            );
+          }
+        }
+      }
+
+      // Ambil semua detail transaksi berdasarkan transaction_in_id
+      const transactionInDetails = await query(
+        `SELECT * FROM transaction_in_detail WHERE transaction_in_id = ?`,
+        [id]
+      );
+
+      // Inisialisasi variabel untuk total amount
+      let amount = 0;
+
+      // Iterasi melalui setiap detail transaksi
+      for (const transactionDetailCheck of transactionInDetails) {
+        // Ambil harga dan jumlah dari setiap produk
+        const productPrice = transactionDetailCheck.price;
+        const productQuantity = transactionDetailCheck.quantity;
+
+        // Hitung total jumlah untuk produk tersebut
+        const productTotal = productPrice * productQuantity;
+
+        // Tambahkan total jumlah produk ke dalam total amount
+        amount += productTotal;
+      }
+
+      // Hitung total amount berdasarkan pajak jika ada
+      const totalAmount = tax ? amount + (amount * tax) / 100 : amount;
+      console.log(totalAmount);
+
+      // Update data transaction_in
+      await query(
+        `UPDATE transaction_in SET 
+      no_faktur = ?,
+      note = ?,
+      payment_method = ?,
+      supplier_id = ?,
+      tax = ?,
+      time_to_payment = ?,
+      amount = ?,
+      amount_tax = ?,
+      updated_at = ?
+      WHERE transaction_in_id = ?`,
+        [
+          noFaktur,
+          note,
+          paymentMethod,
+          supplierId,
+          tax,
+          timeToPayment,
+          amount,
+          totalAmount,
+          updatedDate,
+          id,
+        ]
+      );
+
+      return res
+        .status(200)
+        .send({ message: "Transaction data updated successfully" });
+    } catch (error) {
+      console.error("Update Transaction In Error:", error);
+      await query("ROLLBACK");
+      res.status(500).send({ message: error });
+    }
+  },
+
   transactionOutList: async (req, res) => {
     try {
       const { id } = req.params;
       const getTransactionOut = await query(
-        `SELECT tro.*, c.customer_name 
+        `SELECT tro.*, c.customer_name , u.name ,s.sales_name
         FROM transaction_out  tro
         LEFT JOIN customers c ON c.customer_id = tro.customer_id
+        LEFT JOIN user u ON u.user_id = tro.pic
+        LEFT JOIN sales_team s ON s.sales_id = tro.salesman
         WHERE tro.customer_id = ${id}
         ORDER BY tro.created_at DESC 
         `
@@ -129,28 +476,71 @@ module.exports = {
         totalPaymentTax,
         deliveryDate,
         note,
+        cn,
         noPo,
         salesman,
+        userId,
       } = req.body;
 
+      const errors = [];
+      if (!noFaktur) {
+        errors.push({ field: "noFaktur", message: "Faktur is required" });
+      }
+      if (!paymentMethod) {
+        errors.push({
+          field: "paymentMethod",
+          message: "Payment Method is required",
+        });
+      }
       if (
-        !noFaktur ||
-        !paymentMethod ||
         !productList ||
-        !customerId ||
-        !timeToPayment
+        !Array.isArray(productList) ||
+        productList.length === 0
       ) {
-        return res
-          .status(400)
-          .send({ message: "All values except 'note' must be filled" });
+        errors.push({
+          field: "productList",
+          message: "Product List is required",
+        });
+      }
+      if (!customerId) {
+        errors.push({
+          field: "customerId",
+          message: "Customer ID is required",
+        });
+      }
+      if (!timeToPayment) {
+        errors.push({
+          field: "timeToPayment",
+          message: "Time to Payment is required",
+        });
       }
 
+      if (!deliveryDate) {
+        errors.push({
+          field: "deliveryDate",
+          message: "Delivery Date is required",
+        });
+      }
+      if (!noPo) {
+        errors.push({ field: "noPo", message: "PO Number is required" });
+      }
+      if (!salesman) {
+        errors.push({ field: "salesman", message: "Salesman is required" });
+      }
+      if (!userId) {
+        errors.push({ field: "userId", message: "User ID is required" });
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
       const createdDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
 
-      const insertTransaction = await query(
-        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at,delivery_date,amount,amount_tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      // Insert into transaction_out table
+      const insertTransactionOutResult = await query(
+        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at, delivery_date,sales_cn, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
           noPo,
@@ -161,36 +551,312 @@ module.exports = {
           timeToPayment,
           createdDate,
           deliveryDate,
-          totalPayment,
-          totalPaymentTax,
+          cn,
+          userId,
         ]
       );
 
-      const transactionId = insertTransaction.insertId;
+      const transactionOutId = insertTransactionOutResult.insertId;
 
-      for (let product of productList) {
+      // Loop through productList to process each product
+      for (const productItem of productList) {
+        const { productName, productDisc, productQty, productPpn, productPph } =
+          productItem;
+
+        // Fetch price for the product from products table
+        const productPriceResult = await query(
+          `SELECT price FROM products WHERE product_id = ?`,
+          [productName]
+        );
+
+        const productPrice =
+          productPriceResult.length > 0 ? productPriceResult[0].price : 0;
+
+        // Check if the product is expired
+        const productInfo = await query(
+          `SELECT * FROM products WHERE product_id = ?`,
+          [productName]
+        );
+
+        let remainingQuantity = productQty;
+
+        if (productInfo[0].isExpired == 0) {
+          // If not expired, directly reduce stock
+          await query(
+            `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
+            [productQty, productName]
+          );
+        } else {
+          // If expired, find expired dates and reduce stock accordingly
+          const expiredProducts = await query(
+            `SELECT * FROM product_expired WHERE product_id = ? AND quantity > 0 ORDER BY expired_date ASC`,
+            [productName]
+          );
+          console.log(expiredProducts, "ini exp");
+          for (const expiredProduct of expiredProducts) {
+            const { expired_date, quantity } = expiredProduct;
+
+            if (quantity >= remainingQuantity) {
+              // Reduce stock from this expired date
+              await query(
+                `UPDATE product_expired SET quantity = quantity - ? WHERE product_id = ? AND expired_date = ?`,
+                [remainingQuantity, productName, expired_date]
+              );
+              remainingQuantity = 0;
+              break;
+            } else {
+              // Reduce stock and update remainingQuantity
+              await query(
+                `UPDATE product_expired SET quantity = 0 WHERE product_id = ? AND expired_date = ?`,
+                [productName, expired_date]
+              );
+              remainingQuantity -= quantity;
+            }
+          }
+
+          // Update remaining quantity in main product table
+          if (remainingQuantity > 0) {
+            // If there's remaining quantity, update product table with negative stock
+            await query(
+              `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
+              [remainingQuantity, productName]
+            );
+          } else {
+            const totalStockQueryResult = await query(
+              `SELECT SUM(quantity) AS totalStock FROM product_expired WHERE product_id = ?`,
+              [productName]
+            );
+            await query(`UPDATE products SET stock = ? WHERE product_id = ?`, [
+              totalStockQueryResult[0].totalStock,
+              productName,
+            ]);
+          }
+        }
+
+        // Calculate amounts
+
+        const productDiscDecimal = parseFloat(productDisc) / 100;
+        const productPpnDecimal = parseFloat(productPpn) / 100;
+        const productPphDecimal = parseFloat(productPph) / 100;
+        console.log(productPrice);
+        // Hitung amount
+        let amount;
+        if (!productDiscDecimal || productDiscDecimal === 0) {
+          // Jika diskon null atau 0, hitung jumlah tanpa diskon
+          amount = productPrice * productQty;
+        } else {
+          // Jika diskon tidak null atau tidak 0, terapkan diskon
+          amount = productPrice * productQty * (1 - productDiscDecimal);
+        }
+        console.log(amount);
+        // Hitung amountTax
+        const ppn = productPpnDecimal * amount;
+        const pph = productPphDecimal * amount;
+        const amountTax = amount + ppn + pph;
+        // const amount = 0;
+        // const amountTax = 0;
+
+        // Insert into transaction_out_detail
         await query(
-          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, qty, discount, ppn, pph, cn, amount,amount_tax) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
-            transactionId,
-            product.productName,
-            product.productQty,
-            product.productDisc,
-            product.productPpn,
-            product.productPph,
-            product.productCn,
-            product.productPrice,
-            product.productTotalPrice,
+            transactionOutId,
+            productName,
+            productDisc,
+            productQty,
+            productPpn,
+            productPph,
+            amount,
+            amountTax,
+            productPrice,
           ]
         );
       }
 
-      return res.status(200).send({
-        message: "Data transaksi keluar berhasil disimpan",
-        data: insertTransaction,
-      });
+      // Update amount and amount_tax in transaction_out table
+      const updateTransactionOut = await query(
+        `UPDATE transaction_out SET amount = (SELECT SUM(amount) FROM transaction_out_detail WHERE transaction_out_id = ?), amount_tax = (SELECT SUM(amount_tax) FROM transaction_out_detail WHERE transaction_out_id = ?) WHERE transaction_out_id = ?`,
+        [transactionOutId, transactionOutId, transactionOutId]
+      );
+
+      // Calculate amount_cn and update in transaction_out table
+      const updateAmountCN = await query(
+        `UPDATE transaction_out SET amount_cn = amount_tax * sales_cn WHERE transaction_out_id = ?`,
+        [transactionOutId]
+      );
+
+      return res
+        .status(200)
+        .send({ message: "Transaction created successfully" });
     } catch (error) {
-      console.error("Transaction Out Detail Error:", error);
+      console.error("Error inserting transaction:", error);
+      return res.status(500).send({ message: "Failed to insert transaction" });
+    }
+  },
+  updateTransactionOut: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        noFaktur,
+        paymentMethod,
+        productList,
+        customerId,
+        timeToPayment,
+        totalPayment,
+        totalPaymentTax,
+        deliveryDate,
+        note,
+        cn,
+        noPo,
+        salesman,
+        userId,
+        transactionId,
+      } = req.body;
+
+      // Ambil semua list dari transaction_out_detail berdasarkan transaction_out_id
+      const transactionDetails = await query(
+        `SELECT * FROM transaction_out_detail WHERE transaction_out_id = ?`,
+        [id]
+      );
+
+      // Flag untuk menandai apakah ada perubahan pada transaksi
+      let isTransactionUpdated = false;
+
+      // Bandingkan data transaction_out_detail dengan productList
+      for (const transactionDetail of transactionDetails) {
+        const productInList = productList.find(
+          (product) => product.product_id === transactionDetail.product_id
+        );
+
+        if (!productInList) {
+          // Produk tidak ada dalam productList, hapus dari transaction_out_detail
+          await query(
+            `DELETE FROM transaction_out_detail WHERE transaction_out_detail_id = ?`,
+            [transactionDetail.transaction_out_detail_id]
+          );
+
+          if (transactionDetail.isExpired == 1) {
+            // Produk kadaluarsa, tambahkan ke product_expired
+            // Ambil expired_date tercepat
+            const earliestExpiredDate = await query(
+              `SELECT MIN(expired_date) AS earliest_expired FROM product_expired WHERE product_id = ?`,
+              [transactionDetail.product_id]
+            );
+            const expiredQuantity = transactionDetail.quantity;
+            let remainingQuantity = expiredQuantity;
+
+            // Kurangi expired_quantity dari product_expired yang sesuai
+            while (remainingQuantity > 0) {
+              // Ambil expired_date terdekat
+              const expiredProduct = await query(
+                `SELECT * FROM product_expired WHERE product_id = ? AND expired_date = ?`,
+                [
+                  transactionDetail.product_id,
+                  earliestExpiredDate[0].earliest_expired,
+                ]
+              );
+
+              if (expiredProduct.length > 0) {
+                const availableQuantity = expiredProduct[0].quantity;
+                if (availableQuantity >= remainingQuantity) {
+                  // Kurangi stok expired product
+                  await query(
+                    `UPDATE product_expired SET quantity = ? WHERE product_id = ? AND expired_date = ?`,
+                    [
+                      availableQuantity - remainingQuantity,
+                      transactionDetail.product_id,
+                      earliestExpiredDate[0].earliest_expired,
+                    ]
+                  );
+                  remainingQuantity = 0;
+                } else {
+                  // Kurangi stok expired product dan lanjutkan ke expired_date berikutnya jika masih ada sisa quantity
+                  await query(
+                    `DELETE FROM product_expired WHERE product_id = ? AND expired_date = ?`,
+                    [
+                      transactionDetail.product_id,
+                      earliestExpiredDate[0].earliest_expired,
+                    ]
+                  );
+                  remainingQuantity -= availableQuantity;
+                }
+              } else {
+                // Tidak ada stok expired product yang tersedia
+                break;
+              }
+            }
+
+            // Update stok di table products berdasarkan product_id
+            await query(
+              `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
+              [
+                expiredQuantity - remainingQuantity,
+                transactionDetail.product_id,
+              ]
+            );
+          } else {
+            // Update stok di table products berdasarkan product_id
+            await query(
+              `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
+              [transactionDetail.quantity, transactionDetail.product_id]
+            );
+          }
+          isTransactionUpdated = true;
+        } else {
+          // Produk ada dalam productList
+          if (productInList.quantity !== transactionDetail.quantity) {
+            // Perubahan jumlah produk
+            const quantityDiff =
+              productInList.quantity - transactionDetail.quantity;
+
+            if (transactionDetail.isExpired == 1) {
+              // Update quantity di product_expired
+              // Implementasi logika untuk memperbarui quantity di product_expired
+              // Update stok di table products berdasarkan product_id
+              // Implementasi logika untuk memperbarui stok di products
+            } else {
+              // Update stok di table products berdasarkan product_id
+              // Implementasi logika untuk memperbarui stok di products
+            }
+            isTransactionUpdated = true;
+          }
+        }
+      }
+
+      // Cek jika ada produk baru dalam productList
+      for (const productInList of productList) {
+        const existingDetail = await query(
+          `SELECT * FROM transaction_out_detail WHERE transaction_out_id = ? AND product_id = ?`,
+          [id, productInList.product_id]
+        );
+
+        if (!existingDetail.length) {
+          // Produk baru, tambahkan ke transaction_out_detail
+          // Implementasi logika untuk menambahkan produk baru ke transaction_out_detail
+
+          isTransactionUpdated = true;
+        }
+      }
+
+      // Hitung ulang amount dan amount_tax jika ada perubahan pada transaksi
+      if (isTransactionUpdated) {
+        // Implementasi logika untuk menghitung ulang amount dan amount_tax
+      }
+
+      // Jika terjadi perubahan pada transaksi, lakukan pembaruan
+      if (isTransactionUpdated) {
+        // Implementasi logika untuk memperbarui data transaction_out
+        return res
+          .status(200)
+          .send({ message: "Transaction data updated successfully" });
+      } else {
+        return res.status(200).send({
+          message: "No changes detected. Transaction data remains unchanged",
+        });
+      }
+    } catch (error) {
+      console.error("Update Transaction Out Error:", error);
+      await query("ROLLBACK");
       res.status(500).send({ message: error });
     }
   },
@@ -198,7 +864,7 @@ module.exports = {
     try {
       const { id } = req.params;
       const getTransactionOutDetail = await query(
-        `SELECT 
+        `SELECT
         tod.transaction_out_id,
         tod.transaction_out_detail_id,
         tod.product_id,
@@ -206,17 +872,14 @@ module.exports = {
         tod.qty,
         tod.ppn,
         tod.pph,
-        tod.cn,
+        tod.product_price as price,
         tod.amount,
         tod.amount_tax,
         c.customer_name,
         p.product_name,
         pt.type_name,
         pm.merk_name,
-        p.akl_akd,
-        p.price,
-        p.stock,
-        p.expired_date  
+        p.akl_akd
     FROM 
         transaction_out AS t_out
     LEFT JOIN 
@@ -225,15 +888,18 @@ module.exports = {
         transaction_out_detail AS tod ON tod.transaction_out_id = t_out.transaction_out_id 
     LEFT JOIN 
         products AS p ON p.product_id = tod.product_id 
-    LEFT JOIN 
+    LEFT JOIN
         product_type AS pt ON p.product_type = pt.product_type_id 
     LEFT JOIN 
         product_merk AS pm ON p.product_merk = pm.product_merk_id
-        WHERE t_out.transaction_out_id = ${id};
+    WHERE t_out.transaction_out_id = ${id};
         `
       );
       const getTransactionOut = await query(
-        `SELECT * FROM transaction_out WHERE transaction_out_id = ${id}`
+        `SELECT t_out.* , u.name FROM transaction_out as t_out
+          LEFT JOIN
+        user AS u ON u.user_id = t_out.pic 
+         WHERE transaction_out_id = ${id}`
       );
 
       return res.status(200).send({

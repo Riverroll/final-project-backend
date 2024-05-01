@@ -181,6 +181,24 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+  masterDynamicTransactionForm: async (req, res) => {
+    try {
+      const { supplier_id } = req.body;
+      const masterProduct = await query(
+        `SELECT product_id,product_name,price,stock FROM products WHERE supplier_id = '${supplier_id}'`
+      );
+
+      return res.status(200).send({
+        message: "Get Master Dynamic Transaction Data Success",
+        data: {
+          product: masterProduct,
+        },
+      });
+    } catch (error) {
+      console.error("Master Dynamic Transaction Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
   dataOperasionalDashboard: async (req, res) => {
     try {
       const countTotalProduct = await query(

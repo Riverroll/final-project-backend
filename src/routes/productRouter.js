@@ -25,4 +25,9 @@ router.get("/merk/detail/:id", productController.detailMerk);
 router.put("/merk/update/:id", productController.updateMerk);
 router.delete("/merk/delete/:id", productController.deleteMerk);
 
+// Product Expired Detail
+router.get("/expired/detail/:id", productController.productExpiredDetail);
+
+// Product Filter Supplier
+router.get("/supplier/:id", productController.productSupplier);
 module.exports = router;
