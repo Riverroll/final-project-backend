@@ -6,9 +6,12 @@ module.exports = {
   all: async (req, res) => {
     try {
       const getProducts =
-        await query(`SELECT p.*,pt.type_name,pm.merk_name FROM products p
+        await query(`SELECT p.*,pt.type_name,pm.merk_name,s.supplier_code, COALESCE(SUM(pe.quantity), 0) AS total_stock FROM products p
       LEFT JOIN product_type pt on pt.product_type_id = p.product_type
       LEFT JOIN product_merk pm on pm.product_merk_id = p.product_merk
+      LEFT JOIN product_expired pe ON pe.product_id = p.product_id
+      LEFT JOIN suppliers s ON s.supplier_id = p.supplier_id
+      GROUP BY p.product_id
       ORDER BY p.created_at DESC
       `);
 
@@ -85,12 +88,44 @@ LIMIT 1;
       const {
         name,
         aklAkd,
-        expiredDate,
+        expired,
+        supplierId,
         price,
         stock,
         productType,
         productMerk,
       } = req.body;
+
+      const supplier = await query(
+        `SELECT supplier_code FROM suppliers WHERE supplier_id = ?`,
+        [supplierId]
+      );
+
+      if (supplier.length === 0) {
+        return res.status(400).send({
+          message: "Supplier not found",
+        });
+      }
+
+      const supplierCode = supplier[0].supplier_code;
+
+      const lastProduct = await query(
+        `SELECT product_id FROM products WHERE product_id LIKE ? ORDER BY product_id DESC LIMIT 1`,
+        [`${supplierCode}-%`]
+      );
+
+      let newProductId;
+      if (lastProduct.length === 0) {
+        // Jika tidak ada produk sebelumnya, mulai dari 1
+        newProductId = `${supplierCode}-001`;
+      } else {
+        // Ambil nomor urut terakhir dan tambahkan 1
+        const lastProductId = lastProduct[0].product_id;
+        const lastNumber = parseInt(lastProductId.split("-")[1]);
+        const newNumber = lastNumber + 1;
+        const paddedNumber = String(newNumber).padStart(3, "0");
+        newProductId = `${supplierCode}-${paddedNumber}`;
+      }
 
       const createdDate = moment
         .tz("Asia/Jakarta")
@@ -103,16 +138,9 @@ LIMIT 1;
       if (!aklAkd) {
         errors.push({ field: "aklAkd", message: "NO AKL/AKD is required" });
       }
-      if (!expiredDate) {
-        errors.push({
-          field: "expiredDate",
-          message: "Expired Date is required",
-        });
-      }
       if (!price) {
         errors.push({ field: "price", message: "Price is required" });
       }
-
       if (!productType) {
         errors.push({
           field: "productType",
@@ -131,15 +159,17 @@ LIMIT 1;
       }
 
       const result = await query(
-        `INSERT INTO products (product_name, product_type, product_merk, akl_akd, price, stock , expired_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO products (product_id, product_name, product_type, product_merk, akl_akd, price, stock , isExpired, supplier_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
+          newProductId,
           name,
           productType,
           productMerk,
           aklAkd,
           price,
           stock,
-          expiredDate,
+          expired,
+          supplierId,
           createdDate,
         ]
       );
@@ -158,15 +188,8 @@ LIMIT 1;
   update: async (req, res) => {
     try {
       const { id } = req.params;
-      const {
-        name,
-        aklAkd,
-        expiredDate,
-        price,
-        stock,
-        productType,
-        productMerk,
-      } = req.body;
+      const { name, aklAkd, expired, price, stock, productType, productMerk } =
+        req.body;
       const updatedDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
@@ -181,10 +204,11 @@ LIMIT 1;
       if (!aklAkd) {
         errors.push({ field: "aklAkd", message: "Akl Akd is required" });
       }
-      if (!expiredDate) {
+      if (!expired) {
+        // Perbaikan disini: expired harus dicek, bukan expiredDate
         errors.push({
-          field: "expiredDate",
-          message: "Expired Date is required",
+          field: "expired",
+          message: "Expired is required",
         });
       }
       if (!price) {
@@ -208,25 +232,49 @@ LIMIT 1;
         return res.status(400).send({ errors });
       }
 
-      const updateProduct = await query(
-        `UPDATE products 
-       SET product_name = ?, product_type  = ?, product_merk  = ?, akl_akd  = ?, price  = ?, stock  = ? , expired_date  = ?  , updated_at = ?
-       WHERE product_id = ?`,
-        [
-          name,
-          productType,
-          productMerk,
-          aklAkd,
-          price,
-          stock,
-          expiredDate,
-          updatedDate,
-          id,
-        ]
-      );
+      // Cek apakah stock tidak null atau undefined
+      if (stock !== null && stock !== undefined) {
+        const updateProduct = await query(
+          `UPDATE products 
+        SET product_name = ?, product_type  = ?, product_merk  = ?, akl_akd  = ?, price  = ?, stock  = ? , isExpired  = ?  , updated_at = ?
+        WHERE product_id = ?`,
+          [
+            name,
+            productType,
+            productMerk,
+            aklAkd,
+            price,
+            stock,
+            expired,
+            updatedDate,
+            id,
+          ]
+        );
 
-      if (updateProduct.affectedRows === 0) {
-        return res.status(404).send({ message: "Product not found" });
+        if (updateProduct.affectedRows === 0) {
+          return res.status(404).send({ message: "Product not found" });
+        }
+      } else {
+        // Jika stock null, hanya melakukan update untuk atribut lainnya
+        const updateProductWithoutStock = await query(
+          `UPDATE products 
+        SET product_name = ?, product_type  = ?, product_merk  = ?, akl_akd  = ?, price  = ?, isExpired  = ?  , updated_at = ?
+        WHERE product_id = ?`,
+          [
+            name,
+            productType,
+            productMerk,
+            aklAkd,
+            price,
+            expired,
+            updatedDate,
+            id,
+          ]
+        );
+
+        if (updateProductWithoutStock.affectedRows === 0) {
+          return res.status(404).send({ message: "Product not found" });
+        }
       }
 
       return res.status(200).send({
@@ -242,7 +290,7 @@ LIMIT 1;
       const { id } = req.params;
       const getProduct = await query(
         `SELECT * FROM products
-        WHERE product_id = ${id}
+        WHERE product_id = "${id}"
         `
       );
 
@@ -502,6 +550,45 @@ LIMIT 1;
     } catch (error) {
       console.error("Delete Product Merk Error:", error);
       return res.status(500).send({ message: "Failed to delete Product Type" });
+    }
+  },
+  productExpiredDetail: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const getProductExpired =
+        await query(`SELECT p.product_name, pe.* FROM product_expired pe LEFT JOIN products p ON p.product_id = pe.product_id WHERE pe.product_id = ${id}
+      ORDER BY created_at DESC
+      `);
+
+      return res.status(200).send({
+        message: "Get Products Expired Data Success",
+        data: getProductExpired,
+      });
+    } catch (error) {
+      console.error("Products Expired All Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  productSupplier: async (req, res) => {
+    try {
+      const { id } = req.params;
+      console.log(id);
+      if (!id) {
+        return res.status(400).send({ message: "Supplier ID is required" });
+      }
+      const masterProduct = await query(
+        `SELECT product_id,product_name,price,stock,isExpired FROM products WHERE supplier_id = ${id}`
+      );
+
+      return res.status(200).send({
+        message: "Get Master Dynamic Transaction Data Success",
+        data: {
+          product: masterProduct,
+        },
+      });
+    } catch (error) {
+      console.error("Master Dynamic Transaction Error:", error);
+      res.status(500).send({ message: error });
     }
   },
 };

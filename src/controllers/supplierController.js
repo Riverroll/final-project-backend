@@ -68,7 +68,7 @@ LIMIT 1;
         `SELECT supplier_id,supplier_name,supplier_code FROM suppliers`
       );
       const masterProduct = await query(
-        `SELECT product_id,product_name FROM products`
+        `SELECT product_id,product_name,isExpired FROM products`
       );
 
       const masterProductType = await query(
