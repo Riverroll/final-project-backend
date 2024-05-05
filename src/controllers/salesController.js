@@ -4,9 +4,19 @@ const moment = require("moment-timezone");
 module.exports = {
   all: async (req, res) => {
     try {
-      const getSales = await query(
-        `SELECT * FROM sales_team ORDER BY sales_name ASC`
-      );
+      const getSales = await query(`
+    SELECT 
+        s.*, 
+        COALESCE(SUM(tod.amount_cn), 0) AS total_transaction 
+    FROM 
+        sales_team s 
+    LEFT JOIN 
+        transaction_out tod ON s.sales_id = tod.salesman 
+    GROUP BY 
+        s.sales_id 
+    ORDER BY 
+        s.sales_name ASC
+`);
 
       return res.status(200).send({
         message: "Get Sales Data Success",
@@ -91,15 +101,27 @@ module.exports = {
   detail: async (req, res) => {
     try {
       const { id } = req.params;
+      const getTransactionSales = await query(`
+            SELECT 
+                t.*, 
+                c.customer_name
+            FROM 
+                transaction_out t 
+            LEFT JOIN 
+                customers c ON t.customer_id = c.customer_id 
+            WHERE 
+                t.salesman = ${id}
+        `);
       const getSales = await query(
-        `SELECT * FROM sales_team
-        WHERE sales_id = ${id}
-        `
+        `SELECT * FROM sales_team WHERE sales_id = ${id}`
       );
 
       return res.status(200).send({
         message: "Get Sales Detail Success",
-        data: getSales[0],
+        data: {
+          salesDetail: getSales[0],
+          salesTransaction: getTransactionSales,
+        },
       });
     } catch (error) {
       console.error("Sales Detail Error:", error);
