@@ -556,8 +556,8 @@ LIMIT 1;
     try {
       const { id } = req.params;
       const getProductExpired =
-        await query(`SELECT p.product_name, pe.* FROM product_expired pe LEFT JOIN products p ON p.product_id = pe.product_id WHERE pe.product_id = ${id}
-      ORDER BY created_at DESC
+        await query(`SELECT * FROM product_expired  WHERE product_id = "${id}"
+      ORDER BY expired_date DESC
       `);
 
       return res.status(200).send({
