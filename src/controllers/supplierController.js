@@ -46,6 +46,10 @@ ORDER BY total_transactions DESC
 LIMIT 1;
 `
       );
+      let mostSupplierTransaction = "No transaction found";
+      if (countMostSupplierTransaction.length > 0) {
+        mostSupplierTransaction = countMostSupplierTransaction[0].supplier_name;
+      }
 
       return res.status(200).send({
         message: "Get Supplier Data Success",
@@ -53,8 +57,7 @@ LIMIT 1;
           totalSupplier: countTotalSupplier[0].totalSupplier,
           todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
           totalTransaction: countTotalTransaction[0].totalTransaction,
-          mostSupplierTransaction:
-            countMostSupplierTransaction[0].supplier_name,
+          mostSupplierTransaction: mostSupplierTransaction,
         },
       });
     } catch (error) {
