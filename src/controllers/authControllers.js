@@ -1,18 +1,26 @@
-// require("dotenv").config({
-//   path: ".env",
-// });
 require("dotenv").config();
 const { pool, query } = require("../database");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-// const { getIdFromToken } = require("../helper/jwt-payload");
-
 const env = process.env;
 
 module.exports = {
   register: async (req, res) => {
     try {
       const { name, email, password, role } = req.body;
+
+      if (!name) {
+        return res.status(400).send({ message: "Name is required" });
+      }
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+      if (!password) {
+        return res.status(400).send({ message: "Password is required" });
+      }
+      if (!role) {
+        return res.status(400).send({ message: "Role is required" });
+      }
 
       const existingEmail = await query(
         `SELECT * FROM user WHERE email=${pool.escape(email)}`
@@ -210,7 +218,6 @@ module.exports = {
           id: user[0].user_id,
           name: user[0].name,
           email: user[0].email,
-          isAdmin: user[0].isAdmin,
           role_id: user[0].role_id,
         },
       });
@@ -268,6 +275,15 @@ module.exports = {
   editUser: async (req, res) => {
     try {
       const { user_id, name, email, role_id } = req.body;
+      if (!name) {
+        return res.status(400).send({ message: "Name is required" });
+      }
+      if (!email) {
+        return res.status(400).send({ message: "Email is required" });
+      }
+      if (!role_id) {
+        return res.status(400).send({ message: "Role is required" });
+      }
       const user = await query(
         `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
       );
@@ -323,6 +339,9 @@ module.exports = {
   resetPasswordUser: async (req, res) => {
     try {
       const { id, password } = req.body;
+      if (!password) {
+        return res.status(400).send({ message: "Password is required" });
+      }
       const user = await query(
         `SELECT * FROM user WHERE user_id=${pool.escape(id)}`
       );
