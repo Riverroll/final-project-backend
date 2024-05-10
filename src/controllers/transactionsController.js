@@ -94,10 +94,22 @@ module.exports = {
       if (!supplierId) {
         errors.push({ field: "supplierId", message: "Supplier is required" });
       }
+      if (!timeToPayment) {
+        errors.push({
+          field: "timeToPayment",
+          message: "Time to Payment is required",
+        });
+      }
       if (!paymentMethod) {
         errors.push({
           field: "paymentMethod",
           message: "Payment Method is required",
+        });
+      }
+      if (productList.length === 0) {
+        errors.push({
+          field: "productList",
+          message: "Product List is required",
         });
       }
       if (errors.length > 0) {
@@ -323,16 +335,14 @@ module.exports = {
           `SELECT * FROM transaction_in_detail WHERE transaction_in_id = ? AND product_id = ?`,
           [id, productInList.product_id]
         );
-        console.log(existingProduct, "cek product");
+
         // Jika produk belum ada dalam transaction_in_detail
         if (!existingProduct.length) {
-          console.log(productInList);
           // Tambahkan produk baru ke transaction_in_detail
           const productInfo = await query(
             `SELECT price,isExpired FROM products WHERE product_id = ?`,
             [productInList.product_id]
           );
-          console.log(productInfo);
 
           await query(
             `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity) VALUES (?, ?, ?, ?)`,
@@ -362,7 +372,7 @@ module.exports = {
               `SELECT SUM(quantity) AS total_quantity FROM product_expired WHERE product_id = ?`,
               [productInList.product_id]
             );
-            console.log(totalExpiredQuantity);
+
             // Update stok di table products berdasarkan total quantity di product_expired
             await query(`UPDATE products SET stock = ? WHERE product_id = ?`, [
               totalExpiredQuantity[0].total_quantity,
@@ -402,7 +412,6 @@ module.exports = {
 
       // Hitung total amount berdasarkan pajak jika ada
       const totalAmount = tax ? amount + (amount * tax) / 100 : amount;
-      console.log(totalAmount);
 
       // Update data transaction_in
       await query(
@@ -525,9 +534,9 @@ module.exports = {
       if (!salesman) {
         errors.push({ field: "salesman", message: "Salesman is required" });
       }
-      if (!userId) {
-        errors.push({ field: "userId", message: "User ID is required" });
-      }
+      // if (!userId) {
+      //   errors.push({ field: "userId", message: "User ID is required" });
+      // }
 
       if (errors.length > 0) {
         return res.status(400).send({ errors });
@@ -558,13 +567,12 @@ module.exports = {
 
       // Loop through productList to process each product
       for (const productItem of productList) {
-        const { productName, productDisc, productQty, productPpn, productPph } =
-          productItem;
+        const { product_id, discount, qty, ppn, pph } = productItem;
 
         // Fetch price for the product from products table
         const productPriceResult = await query(
           `SELECT price FROM products WHERE product_id = ?`,
-          [productName]
+          [product_id]
         );
 
         const productPrice =
@@ -573,22 +581,22 @@ module.exports = {
         // Check if the product is expired
         const productInfo = await query(
           `SELECT * FROM products WHERE product_id = ?`,
-          [productName]
+          [product_id]
         );
 
-        let remainingQuantity = productQty;
+        let remainingQuantity = qty;
 
         if (productInfo[0].isExpired == 0) {
           // If not expired, directly reduce stock
           await query(
             `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
-            [productQty, productName]
+            [qty, product_id]
           );
         } else {
           // If expired, find expired dates and reduce stock accordingly
           const expiredProducts = await query(
             `SELECT * FROM product_expired WHERE product_id = ? AND quantity > 0 ORDER BY expired_date ASC`,
-            [productName]
+            [product_id]
           );
 
           for (const expiredProduct of expiredProducts) {
@@ -598,7 +606,7 @@ module.exports = {
               // Reduce stock from this expired date
               await query(
                 `UPDATE product_expired SET quantity = quantity - ? WHERE product_id = ? AND expired_date = ?`,
-                [remainingQuantity, productName, expired_date]
+                [remainingQuantity, product_id, expired_date]
               );
 
               await query(
@@ -620,7 +628,7 @@ module.exports = {
 
               await query(
                 `UPDATE product_expired SET quantity = 0 WHERE product_id = ? AND expired_date = ?`,
-                [productName, expired_date]
+                [product_id, expired_date]
               );
 
               await query(
@@ -640,39 +648,39 @@ module.exports = {
             // If there's remaining quantity, update product table with negative stock
             await query(
               `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
-              [remainingQuantity, productName]
+              [remainingQuantity, product_id]
             );
           } else {
             const totalStockQueryResult = await query(
               `SELECT SUM(quantity) AS totalStock FROM product_expired WHERE product_id = ?`,
-              [productName]
+              [product_id]
             );
             await query(`UPDATE products SET stock = ? WHERE product_id = ?`, [
               totalStockQueryResult[0].totalStock,
-              productName,
+              product_id,
             ]);
           }
         }
 
         // Calculate amounts
 
-        const productDiscDecimal = parseFloat(productDisc) / 100;
-        const productPpnDecimal = parseFloat(productPpn) / 100;
-        const productPphDecimal = parseFloat(productPph) / 100;
-        console.log(productPrice);
+        const productDiscDecimal = parseFloat(discount) / 100;
+        const productPpnDecimal = parseFloat(ppn) / 100;
+        const productPphDecimal = parseFloat(pph) / 100;
+
         // Hitung amount
         let amount;
         if (!productDiscDecimal || productDiscDecimal === 0) {
           // Jika diskon null atau 0, hitung jumlah tanpa diskon
-          amount = productPrice * productQty;
+          amount = productPrice * qty;
         } else {
           // Jika diskon tidak null atau tidak 0, terapkan diskon
-          amount = productPrice * productQty * (1 - productDiscDecimal);
+          amount = productPrice * qty * (1 - productDiscDecimal);
         }
         // Hitung amountTax
-        const ppn = productPpnDecimal * amount;
-        const pph = productPphDecimal * amount;
-        const amountTax = amount + ppn + pph;
+        const ResultPpn = productPpnDecimal * amount;
+        const ResultPph = productPphDecimal * amount;
+        const amountTax = amount + ResultPpn + ResultPph;
         // const amount = 0;
         // const amountTax = 0;
 
@@ -681,11 +689,11 @@ module.exports = {
           `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transactionOutId,
-            productName,
-            productDisc,
-            productQty,
-            productPpn,
-            productPph,
+            product_id,
+            discount,
+            qty,
+            ppn,
+            pph,
             amount,
             amountTax,
             productPrice,
@@ -770,7 +778,7 @@ module.exports = {
 
         // Periksa apakah produk ada dalam daftar produk yang dikirimkan
         const productExist = productList.find(
-          (product) => product.productName === product_id
+          (product) => product.product_id === product_id
         );
 
         const productInfo = await query(
@@ -786,7 +794,6 @@ module.exports = {
               `SELECT * FROM transaction_product_expired WHERE transaction_out_id = ? AND quantity > 0 ORDER BY transaction_product_expired_id ASC`,
               [id]
             );
-
             for (const expiredProduct of expiredProducts) {
               const { expired_date, quantity, product_expired_id } =
                 expiredProduct;
@@ -799,8 +806,8 @@ module.exports = {
 
               // Hapus entri produk dari transaction_product_expired
               await query(
-                `DELETE FROM transaction_product_expired WHERE product_expired_id = ?`,
-                [product_expired_id]
+                `DELETE FROM transaction_product_expired WHERE transaction_out_id = ?`,
+                [id]
               );
 
               await query(
@@ -834,19 +841,14 @@ module.exports = {
           }
         } else {
           // Jika produk ada dalam daftar produk yang dikirimkan
-          const {
-            productName,
-            productDisc,
-            productQty,
-            productPpn,
-            productPph,
-          } = productExist;
+          const { product_id, discount, qty, ppn, pph } = productExist;
           if (
-            productQty !== qty ||
-            productDisc !== transactionDetail.discount
+            productExist.qty != transactionDetail.qty ||
+            productExist.discount != transactionDetail.discount
           ) {
+            // done expired
             if (productInfo[0].isExpired == 1) {
-              let remainingQuantity = productQty;
+              let remainingQuantity = productExist.qty;
               // Jika produk kedaluwarsa
               const expiredProducts = await query(
                 `SELECT * FROM transaction_product_expired WHERE transaction_out_id = ? AND quantity > 0 ORDER BY transaction_product_expired_id ASC`,
@@ -860,7 +862,7 @@ module.exports = {
                 // Tambahkan kuantitas kembali ke stok
                 await query(
                   `UPDATE product_expired SET quantity = quantity + ? WHERE product_expired_id = ?`,
-                  [quantity, product_expired_id]
+                  [expiredProduct.quantity, product_expired_id]
                 );
 
                 // Hapus entri produk dari transaction_product_expired
@@ -878,17 +880,17 @@ module.exports = {
               // If expired, find expired dates and reduce stock accordingly
               const expiredProductDetails = await query(
                 `SELECT * FROM product_expired WHERE product_id = ? AND quantity > 0 ORDER BY expired_date ASC`,
-                [productName]
+                [productExist.product_id]
               );
 
               for (const expiredProduct of expiredProductDetails) {
                 const { expired_date, quantity } = expiredProduct;
 
-                if (quantity >= remainingQuantity) {
+                if (expiredProduct.quantity >= remainingQuantity) {
                   // Reduce stock from this expired date
                   await query(
                     `UPDATE product_expired SET quantity = quantity - ? WHERE product_id = ? AND expired_date = ?`,
-                    [remainingQuantity, productName, expired_date]
+                    [remainingQuantity, productExist.product_id, expired_date]
                   );
 
                   await query(
@@ -900,13 +902,13 @@ module.exports = {
                 } else {
                   // Reduce stock and update remainingQuantity
                   const actualQuantityReduced = Math.min(
-                    quantity,
+                    expiredProduct.quantity,
                     remainingQuantity
                   );
 
                   await query(
                     `UPDATE product_expired SET quantity = 0 WHERE product_id = ? AND expired_date = ?`,
-                    [productName, expired_date]
+                    [productExist.product_id, expired_date]
                   );
 
                   await query(
@@ -917,7 +919,7 @@ module.exports = {
                       id,
                     ]
                   );
-                  remainingQuantity -= quantity;
+                  remainingQuantity -= expiredProduct.quantity;
                 }
               }
 
@@ -926,16 +928,16 @@ module.exports = {
                 // If there's remaining quantity, update product table with negative stock
                 await query(
                   `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
-                  [remainingQuantity, productName]
+                  [remainingQuantity, productExist.product_id]
                 );
               } else {
                 const totalStockQueryResult = await query(
                   `SELECT SUM(quantity) AS totalStock FROM product_expired WHERE product_id = ?`,
-                  [productName]
+                  [productExist.product_id]
                 );
                 await query(
                   `UPDATE products SET stock = ? WHERE product_id = ?`,
-                  [totalStockQueryResult[0].totalStock, productName]
+                  [totalStockQueryResult[0].totalStock, productExist.product_id]
                 );
               }
               // Hitung ulang total stok produk yang kedaluwarsa
@@ -950,38 +952,39 @@ module.exports = {
                 [totalStockQueryResult[0].totalStock, product_id]
               );
             } else {
+              // clear
               // Jika produk tidak kedaluwarsa, tambahkan stok langsung
               await query(
                 `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
-                [qty, product_id]
+                [transactionDetail.qty, productExist.product_id]
               );
 
+              await query(
+                `UPDATE products SET stock = stock - ? WHERE product_id = ?`,
+                [productExist.qty, productExist.product_id]
+              );
               await query(
                 `DELETE FROM transaction_out_detail WHERE transaction_out_detail_id = ?`,
                 [transaction_out_detail_id]
               );
-              await query(
-                `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
-                [productQty, product_id]
-              );
             }
             const productPriceResult = await query(
               `SELECT price FROM products WHERE product_id = ?`,
-              [productName]
+              [productExist.product_id]
             );
 
             const productPrice =
               productPriceResult.length > 0 ? productPriceResult[0].price : 0;
-
-            const productDiscDecimal = parseFloat(productDisc) / 100;
-            const productPpnDecimal = parseFloat(productPpn) / 100;
-            const productPphDecimal = parseFloat(productPph) / 100;
+            const productDiscDecimal = parseFloat(productExist.discount) / 100;
+            const productPpnDecimal = parseFloat(productExist.ppn) / 100;
+            const productPphDecimal = parseFloat(productExist.pph) / 100;
 
             let amount;
             if (!productDiscDecimal || productDiscDecimal === 0) {
-              amount = productPrice * productQty;
+              amount = productPrice * productExist.qty;
             } else {
-              amount = productPrice * productQty * (1 - productDiscDecimal);
+              amount =
+                productPrice * productExist.qty * (1 - productDiscDecimal);
             }
 
             const ppn = productPpnDecimal * amount;
@@ -992,11 +995,11 @@ module.exports = {
               `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 id,
-                productName,
-                productDisc,
-                productQty,
-                productPpn,
-                productPph,
+                productExist.product_id,
+                productExist.discount,
+                productExist.qty,
+                productExist.ppn,
+                productExist.pph,
                 amount,
                 amountTax,
                 productPrice,
@@ -1010,7 +1013,6 @@ module.exports = {
       // logic kalau ada product
       for (const product of productList) {
         const { product_id, discount, qty, pph, ppn } = product;
-        console.log(product);
 
         // Check if product exists in transaction details
         const existingProduct = transactionDetails.find(
@@ -1029,9 +1031,7 @@ module.exports = {
             `SELECT * FROM products WHERE product_id = ?`,
             [product_id]
           );
-
           let remainingQuantity = qty;
-          console.log(productInfo[0]);
           if (productInfo[0].isExpired == 0) {
             // If not expired, directly reduce stock
             await query(
@@ -1099,36 +1099,36 @@ module.exports = {
               );
             }
           }
+          const productDiscDecimal = parseFloat(discount) / 100;
+          const productPpnDecimal = parseFloat(ppn) / 100;
+          const productPphDecimal = parseFloat(pph) / 100;
+
+          let amount;
+          if (!productDiscDecimal || productDiscDecimal === 0) {
+            amount = productPrice * qty;
+          } else {
+            amount = productPrice * qty * (1 - productDiscDecimal);
+          }
+
+          const ResultPpn = productPpnDecimal * amount;
+          const ResultPph = productPphDecimal * amount;
+          const amountTax = amount + ResultPpn + ResultPph;
+
+          await query(
+            `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              id,
+              product_id,
+              discount,
+              qty,
+              ppn,
+              pph,
+              amount,
+              amountTax,
+              productPrice,
+            ]
+          );
         }
-        const productDiscDecimal = parseFloat(discount) / 100;
-        const productPpnDecimal = parseFloat(ppn) / 100;
-        const productPphDecimal = parseFloat(pph) / 100;
-
-        let amount;
-        if (!productDiscDecimal || productDiscDecimal === 0) {
-          amount = productPrice * qty;
-        } else {
-          amount = productPrice * qty * (1 - productDiscDecimal);
-        }
-
-        const Productppn = productPpnDecimal * amount;
-        const Productpph = productPphDecimal * amount;
-        const amountTax = amount + ppn + pph;
-
-        await query(
-          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            id,
-            product_id,
-            discount,
-            qty,
-            ppn,
-            pph,
-            amount,
-            amountTax,
-            productPrice,
-          ]
-        );
       }
 
       // Hitung ulang jumlah dan jumlah pajak transaksi
