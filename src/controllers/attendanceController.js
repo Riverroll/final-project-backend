@@ -212,13 +212,13 @@ module.exports = {
       let getAttendanceData;
       if (role_id == 1) {
         getAttendanceData = await query(
-          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id `
+          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id order by attendance.date desc`
         );
       } else {
         getAttendanceData = await query(
           `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id WHERE attendance.user_id = ${pool.escape(
             user_id
-          )}`
+          )} order by attendance.date desc`
         );
       }
       return res.status(200).send({
