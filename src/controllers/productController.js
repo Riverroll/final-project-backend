@@ -135,23 +135,9 @@ LIMIT 1;
       if (!name) {
         errors.push({ field: "name", message: "Name is required" });
       }
-      if (!aklAkd) {
-        errors.push({ field: "aklAkd", message: "NO AKL/AKD is required" });
-      }
+
       if (!price) {
         errors.push({ field: "price", message: "Price is required" });
-      }
-      if (!productType) {
-        errors.push({
-          field: "productType",
-          message: "Product Type is required",
-        });
-      }
-      if (!productMerk) {
-        errors.push({
-          field: "productMerk",
-          message: "Product Merk is required",
-        });
       }
 
       if (errors.length > 0) {
@@ -201,9 +187,7 @@ LIMIT 1;
       if (!name) {
         errors.push({ field: "name", message: "Name is required" });
       }
-      if (!aklAkd) {
-        errors.push({ field: "aklAkd", message: "Akl Akd is required" });
-      }
+
       if (!expired) {
         // Perbaikan disini: expired harus dicek, bukan expiredDate
         errors.push({
@@ -213,19 +197,6 @@ LIMIT 1;
       }
       if (!price) {
         errors.push({ field: "price", message: "Price is required" });
-      }
-
-      if (!productType) {
-        errors.push({
-          field: "productType",
-          message: "Product Type is required",
-        });
-      }
-      if (!productMerk) {
-        errors.push({
-          field: "productMerk",
-          message: "Product Merk is required",
-        });
       }
 
       if (errors.length > 0) {

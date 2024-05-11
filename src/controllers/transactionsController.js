@@ -531,9 +531,9 @@ module.exports = {
       if (!noPo) {
         errors.push({ field: "noPo", message: "PO Number is required" });
       }
-      if (!salesman) {
-        errors.push({ field: "salesman", message: "Salesman is required" });
-      }
+      // if (!salesman) {
+      //   errors.push({ field: "salesman", message: "Salesman is required" });
+      // }
       // if (!userId) {
       //   errors.push({ field: "userId", message: "User ID is required" });
       // }
@@ -709,7 +709,9 @@ module.exports = {
 
       // Calculate amount_cn and update in transaction_out table
       const updateAmountCN = await query(
-        `UPDATE transaction_out SET amount_cn = amount_tax * sales_cn WHERE transaction_out_id = ?`,
+        `UPDATE transaction_out 
+SET amount_cn = amount_tax * (sales_cn / 100) 
+WHERE transaction_out_id = ?`,
         [transactionOutId]
       );
 
@@ -736,7 +738,58 @@ module.exports = {
         noPo,
         salesman,
       } = req.body;
+      const errors = [];
+      if (!noFaktur) {
+        errors.push({ field: "noFaktur", message: "Faktur is required" });
+      }
+      if (!paymentMethod) {
+        errors.push({
+          field: "paymentMethod",
+          message: "Payment Method is required",
+        });
+      }
+      if (
+        !productList ||
+        !Array.isArray(productList) ||
+        productList.length === 0
+      ) {
+        errors.push({
+          field: "productList",
+          message: "Product List is required",
+        });
+      }
+      if (!customerId) {
+        errors.push({
+          field: "customerId",
+          message: "Customer ID is required",
+        });
+      }
+      if (!timeToPayment) {
+        errors.push({
+          field: "timeToPayment",
+          message: "Time to Payment is required",
+        });
+      }
 
+      if (!deliveryDate) {
+        errors.push({
+          field: "deliveryDate",
+          message: "Delivery Date is required",
+        });
+      }
+      if (!noPo) {
+        errors.push({ field: "noPo", message: "PO Number is required" });
+      }
+      // if (!salesman) {
+      //   errors.push({ field: "salesman", message: "Salesman is required" });
+      // }
+      // if (!userId) {
+      //   errors.push({ field: "userId", message: "User ID is required" });
+      // }
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
       // Update transaction_out table
       const updateTransactionOutResult = await query(
         `UPDATE transaction_out SET 
@@ -1142,8 +1195,8 @@ module.exports = {
 
       const updateAmountCN = await query(
         `UPDATE transaction_out 
-      SET amount_cn = amount_tax * sales_cn 
-      WHERE transaction_out_id = ?`,
+SET amount_cn = amount_tax * (sales_cn / 100) 
+WHERE transaction_out_id = ?`,
         [id]
       );
 
