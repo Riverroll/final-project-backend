@@ -450,7 +450,7 @@ module.exports = {
     }
   },
 
-  transactionOutList: async (req, res) => {
+  transactionOutListCustomer: async (req, res) => {
     try {
       const { id } = req.params;
       const getTransactionOut = await query(
@@ -461,6 +461,27 @@ module.exports = {
         LEFT JOIN sales_team s ON s.sales_id = tro.salesman
         WHERE tro.customer_id = ${id}
         ORDER BY tro.created_at DESC 
+        `
+      );
+
+      return res.status(200).send({
+        message: "Get All Transaction In Data Success",
+        data: getTransactionOut,
+      });
+    } catch (error) {
+      console.error("All Transaction In Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
+  transactionOutList: async (req, res) => {
+    try {
+      const getTransactionOut = await query(
+        `SELECT tro.*, c.customer_name , u.name ,s.sales_name
+        FROM transaction_out  tro
+        LEFT JOIN customers c ON c.customer_id = tro.customer_id
+        LEFT JOIN user u ON u.user_id = tro.pic
+        LEFT JOIN sales_team s ON s.sales_id = tro.salesman
+        ORDER BY tro.created_at ASC 
         `
       );
 
