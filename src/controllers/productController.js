@@ -171,6 +171,113 @@ LIMIT 1;
         .send({ message: error.message || "Failed to create Product" });
     }
   },
+  allCreate: async (req, res) => {
+    try {
+      const { productList } = req.body;
+
+      const errors = [];
+      const results = [];
+
+      for (const product of productList) {
+        const {
+          product_name,
+          akl_akd,
+          product_expired,
+          supplier,
+          price,
+          stock,
+          product_type,
+          product_merk,
+        } = product;
+
+        const supplierResult = await query(
+          `SELECT supplier_code FROM suppliers WHERE supplier_id = ?`,
+          [supplier]
+        );
+
+        if (supplierResult.length === 0) {
+          errors.push({
+            field: "supplier",
+            message: "Supplier not found",
+            product,
+          });
+          continue;
+        }
+
+        const supplierCode = supplierResult[0].supplier_code;
+
+        const lastProduct = await query(
+          `SELECT product_id FROM products WHERE product_id LIKE ? ORDER BY product_id DESC LIMIT 1`,
+          [`${supplierCode}-%`]
+        );
+
+        let newProductId;
+        if (lastProduct.length === 0) {
+          newProductId = `${supplierCode}-001`;
+        } else {
+          const lastProductId = lastProduct[0].product_id;
+          const lastNumber = parseInt(lastProductId.split("-")[1]);
+          const newNumber = lastNumber + 1;
+          const paddedNumber = String(newNumber).padStart(3, "0");
+          newProductId = `${supplierCode}-${paddedNumber}`;
+        }
+
+        const createdDate = moment
+          .tz("Asia/Jakarta")
+          .format("YYYY-MM-DD HH:mm:ss");
+
+        if (!product_name) {
+          errors.push({
+            field: "product_name",
+            message: "Product name is required",
+            product,
+          });
+          continue;
+        }
+
+        if (!price) {
+          errors.push({
+            field: "price",
+            message: "Price is required",
+            product,
+          });
+          continue;
+        }
+
+        const result = await query(
+          `INSERT INTO products (product_id, product_name, product_type, product_merk, akl_akd, price, stock , isExpired, supplier_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            newProductId,
+            product_name,
+            product_type,
+            product_merk,
+            akl_akd,
+            price,
+            stock,
+            product_expired,
+            supplier,
+            createdDate,
+          ]
+        );
+
+        results.push(result);
+      }
+
+      if (errors.length > 0) {
+        return res.status(400).send({ errors });
+      }
+
+      return res.status(200).send({
+        message: "Products created successfully",
+        data: results,
+      });
+    } catch (error) {
+      console.error("Create Product Error:", error);
+      return res
+        .status(500)
+        .send({ message: error.message || "Failed to create Product" });
+    }
+  },
   update: async (req, res) => {
     try {
       const { id } = req.params;
