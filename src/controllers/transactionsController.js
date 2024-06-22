@@ -39,6 +39,8 @@ module.exports = {
         tid.quantity,
         tid.price,
         tid.product_id,
+        tid.product_code,
+        tid.batch_lot,
         pe.expired_date
       FROM transaction_in as ti
       LEFT JOIN suppliers s ON s.supplier_id = ti.supplier_id
@@ -75,6 +77,7 @@ module.exports = {
     try {
       const {
         noFaktur,
+        noKita,
         note,
         paymentMethod,
         productList,
@@ -118,14 +121,13 @@ module.exports = {
 
       let amount = 0;
 
-      // Memulai transaksi
       await query("START TRANSACTION");
 
-      // Insert data ke dalam tabel transaction_in
       const insertTransaction = await query(
-        `INSERT INTO transaction_in (no_faktur, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_in (no_faktur,no_kita, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
+          noKita,
           note,
           paymentMethod,
           amount,
@@ -155,14 +157,17 @@ module.exports = {
 
         const price = productData[0].price;
         const totalPrice = price * product.quantity;
-
-        // Tambahkan total harga produk ke dalam amount
         amount += totalPrice;
-
-        // Masukkan nilai price ke dalam tabel transaction_in_detail
         await query(
-          `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity) VALUES (?, ?, ?, ?)`,
-          [transactionId, product.product_id, price, product.quantity]
+          `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity, product_code, batch_lot) VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            transactionId,
+            product.product_id,
+            price,
+            product.quantity,
+            product.product_code,
+            product.batch_lot,
+          ]
         );
 
         if (productData[0].isExpired == 1) {
@@ -345,10 +350,12 @@ module.exports = {
           );
 
           await query(
-            `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity) VALUES (?, ?, ?, ?)`,
+            `INSERT INTO transaction_in_detail (transaction_in_id, product_id, product_code, batch_lot, price, quantity) VALUES (?,?, ?, ?, ?, ?)`,
             [
               id,
               productInList.product_id,
+              productInList.product_code,
+              productInList.batch_lot,
               productInfo[0].price,
               productInList.quantity,
             ]
