@@ -80,6 +80,12 @@ LIMIT 1;
       const masterProductMerk = await query(
         `SELECT product_merk_id,merk_name FROM product_merk`
       );
+
+      const lastTransactionNumber = await getLastTransactionNumber();
+
+      const newTransactionNumber = generateNewTransactionNumber(
+        lastTransactionNumber
+      );
       return res.status(200).send({
         message: "Get Master Dynamic Data Success",
         data: {
@@ -87,6 +93,7 @@ LIMIT 1;
           product: masterProduct,
           productType: masterProductType,
           productMerk: masterProductMerk,
+          transactionNumber: newTransactionNumber,
         },
       });
     } catch (error) {
@@ -206,4 +213,23 @@ LIMIT 1;
       res.status(500).send({ message: "Failed to update Distributor" });
     }
   },
+};
+
+const getLastTransactionNumber = async () => {
+  const result = await query(
+    `SELECT no_kita FROM transaction_in ORDER BY created_at DESC LIMIT 1`
+  );
+  return result.length ? result[0].no_kita : null;
+};
+
+const generateNewTransactionNumber = (lastNumber) => {
+  const prefix = "FM-SMS/";
+  let newNumber = 1;
+
+  if (lastNumber) {
+    const lastNumberInt = parseInt(lastNumber.split("/")[1], 10);
+    newNumber = lastNumberInt + 1;
+  }
+
+  return `${prefix}${String(newNumber).padStart(3, "0")}`;
 };
