@@ -511,16 +511,13 @@ module.exports = {
         timeToPayment,
         deliveryDate,
         note,
-        cn,
         noPo,
         salesman,
         userId,
       } = req.body;
 
       const errors = [];
-      if (!noFaktur) {
-        errors.push({ field: "noFaktur", message: "Faktur is required" });
-      }
+
       if (!paymentMethod) {
         errors.push({
           field: "paymentMethod",
@@ -556,15 +553,6 @@ module.exports = {
           message: "Delivery Date is required",
         });
       }
-      if (!noPo) {
-        errors.push({ field: "noPo", message: "PO Number is required" });
-      }
-      // if (!salesman) {
-      //   errors.push({ field: "salesman", message: "Salesman is required" });
-      // }
-      // if (!userId) {
-      //   errors.push({ field: "userId", message: "User ID is required" });
-      // }
 
       if (errors.length > 0) {
         return res.status(400).send({ errors });
@@ -573,9 +561,8 @@ module.exports = {
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
 
-      // Insert into transaction_out table
       const insertTransactionOutResult = await query(
-        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at, delivery_date,sales_cn, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at, delivery_date, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
           noPo,
@@ -586,25 +573,24 @@ module.exports = {
           timeToPayment,
           createdDate,
           deliveryDate,
-          cn,
           userId,
         ]
       );
 
       const transactionOutId = insertTransactionOutResult.insertId;
 
-      // Loop through productList to process each product
       for (const productItem of productList) {
-        const { product_id, discount, qty, ppn, pph } = productItem;
-
-        // Fetch price for the product from products table
-        const productPriceResult = await query(
-          `SELECT price FROM products WHERE product_id = ?`,
-          [product_id]
-        );
-
-        const productPrice =
-          productPriceResult.length > 0 ? productPriceResult[0].price : 0;
+        const {
+          product_id,
+          discount,
+          qty,
+          ppn,
+          pph,
+          productTotalPrice,
+          price,
+          cn,
+          cn_type,
+        } = productItem;
 
         // Check if the product is expired
         const productInfo = await query(
@@ -692,29 +678,29 @@ module.exports = {
 
         // Calculate amounts
 
-        const productDiscDecimal = parseFloat(discount) / 100;
-        const productPpnDecimal = parseFloat(ppn) / 100;
-        const productPphDecimal = parseFloat(pph) / 100;
+        // const productDiscDecimal = parseFloat(discount) / 100;
+        // const productPpnDecimal = parseFloat(ppn) / 100;
+        // const productPphDecimal = parseFloat(pph) / 100;
 
         // Hitung amount
-        let amount;
-        if (!productDiscDecimal || productDiscDecimal === 0) {
-          // Jika diskon null atau 0, hitung jumlah tanpa diskon
-          amount = productPrice * qty;
-        } else {
-          // Jika diskon tidak null atau tidak 0, terapkan diskon
-          amount = productPrice * qty * (1 - productDiscDecimal);
-        }
+        // let amount;
+        // if (!productDiscDecimal || productDiscDecimal === 0) {
+        // Jika diskon null atau 0, hitung jumlah tanpa diskon
+        // amount = productPrice * qty;
+        // } else {
+        // Jika diskon tidak null atau tidak 0, terapkan diskon
+        //   amount = productPrice * qty * (1 - productDiscDecimal);
+        // }
         // Hitung amountTax
-        const ResultPpn = productPpnDecimal * amount;
-        const ResultPph = productPphDecimal * amount;
-        const amountTax = amount + ResultPpn + ResultPph;
+        // const ResultPpn = productPpnDecimal * amount;
+        // const ResultPph = productPphDecimal * amount;
+        // const amountTax = amount + ResultPpn + ResultPph;
         // const amount = 0;
         // const amountTax = 0;
 
         // Insert into transaction_out_detail
         await query(
-          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount_tax, product_price, cn , cn_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transactionOutId,
             product_id,
@@ -722,9 +708,10 @@ module.exports = {
             qty,
             ppn,
             pph,
-            amount,
-            amountTax,
-            productPrice,
+            productTotalPrice,
+            price,
+            cn,
+            cn_type,
           ]
         );
       }
@@ -735,12 +722,22 @@ module.exports = {
         [transactionOutId, transactionOutId, transactionOutId]
       );
 
-      // Calculate amount_cn and update in transaction_out table
-      const updateAmountCN = await query(
-        `UPDATE transaction_out 
-SET amount_cn = amount_tax * (sales_cn / 100) 
-WHERE transaction_out_id = ?`,
+      await query(
+        `UPDATE transaction_out_detail
+     SET amount_cn = CASE 
+       WHEN cn_type = 'Percentage' THEN (product_price * qty) * (cn / 100)
+       WHEN cn_type = 'Nominal' THEN cn * qty
+     END
+     WHERE transaction_out_id = ?`,
         [transactionOutId]
+      );
+
+      // Calculate amount_cn and update in transaction_out table
+      await query(
+        `UPDATE transaction_out 
+     SET amount_cn = (SELECT SUM(amount_cn) FROM transaction_out_detail WHERE transaction_out_id = ?) 
+     WHERE transaction_out_id = ?`,
+        [transactionOutId, transactionOutId]
       );
 
       return res
@@ -762,14 +759,11 @@ WHERE transaction_out_id = ?`,
         timeToPayment,
         deliveryDate,
         note,
-        cn,
         noPo,
         salesman,
       } = req.body;
       const errors = [];
-      if (!noFaktur) {
-        errors.push({ field: "noFaktur", message: "Faktur is required" });
-      }
+
       if (!paymentMethod) {
         errors.push({
           field: "paymentMethod",
@@ -805,15 +799,6 @@ WHERE transaction_out_id = ?`,
           message: "Delivery Date is required",
         });
       }
-      if (!noPo) {
-        errors.push({ field: "noPo", message: "PO Number is required" });
-      }
-      // if (!salesman) {
-      //   errors.push({ field: "salesman", message: "Salesman is required" });
-      // }
-      // if (!userId) {
-      //   errors.push({ field: "userId", message: "User ID is required" });
-      // }
 
       if (errors.length > 0) {
         return res.status(400).send({ errors });
@@ -829,7 +814,6 @@ WHERE transaction_out_id = ?`,
         customer_id = ?, 
         time_to_payment = ?, 
         delivery_date = ?, 
-        sales_cn = ?, 
         updated_at = CURRENT_TIMESTAMP 
       WHERE transaction_out_id = ?`,
         [
@@ -841,7 +825,6 @@ WHERE transaction_out_id = ?`,
           customerId,
           timeToPayment,
           deliveryDate,
-          cn,
           id,
         ]
       );
@@ -923,9 +906,14 @@ WHERE transaction_out_id = ?`,
         } else {
           // Jika produk ada dalam daftar produk yang dikirimkan
           const { product_id, discount, qty, ppn, pph } = productExist;
+          console.log(product_id, "cek");
+
           if (
             productExist.qty != transactionDetail.qty ||
-            productExist.discount != transactionDetail.discount
+            productExist.discount != transactionDetail.discount ||
+            productExist.price != transactionDetail.product_price ||
+            productExist.cn != transactionDetail.cn ||
+            productExist.cn_type != transactionDetail.cn_type
           ) {
             // done expired
             if (productInfo[0].isExpired == 1) {
@@ -1032,6 +1020,10 @@ WHERE transaction_out_id = ?`,
                 `UPDATE products SET stock = ? WHERE product_id = ?`,
                 [totalStockQueryResult[0].totalStock, product_id]
               );
+              await query(
+                `DELETE FROM transaction_out_detail WHERE transaction_out_detail_id = ?`,
+                [transaction_out_detail_id]
+              );
             } else {
               // clear
               // Jika produk tidak kedaluwarsa, tambahkan stok langsung
@@ -1049,31 +1041,31 @@ WHERE transaction_out_id = ?`,
                 [transaction_out_detail_id]
               );
             }
-            const productPriceResult = await query(
-              `SELECT price FROM products WHERE product_id = ?`,
-              [productExist.product_id]
-            );
+            // const productPriceResult = await query(
+            //   `SELECT price FROM products WHERE product_id = ?`,
+            //   [productExist.product_id]
+            // );
 
-            const productPrice =
-              productPriceResult.length > 0 ? productPriceResult[0].price : 0;
-            const productDiscDecimal = parseFloat(productExist.discount) / 100;
-            const productPpnDecimal = parseFloat(productExist.ppn) / 100;
-            const productPphDecimal = parseFloat(productExist.pph) / 100;
+            // const productPrice =
+            //   productPriceResult.length > 0 ? productPriceResult[0].price : 0;
+            // const productDiscDecimal = parseFloat(productExist.discount) / 100;
+            // const productPpnDecimal = parseFloat(productExist.ppn) / 100;
+            // const productPphDecimal = parseFloat(productExist.pph) / 100;
 
-            let amount;
-            if (!productDiscDecimal || productDiscDecimal === 0) {
-              amount = productPrice * productExist.qty;
-            } else {
-              amount =
-                productPrice * productExist.qty * (1 - productDiscDecimal);
-            }
+            // let amount;
+            // if (!productDiscDecimal || productDiscDecimal === 0) {
+            //   amount = productPrice * productExist.qty;
+            // } else {
+            //   amount =
+            //     productPrice * productExist.qty * (1 - productDiscDecimal);
+            // }
 
-            const ppn = productPpnDecimal * amount;
-            const pph = productPphDecimal * amount;
-            const amountTax = amount + ppn + pph;
+            // const ppn = productPpnDecimal * amount;
+            // const pph = productPphDecimal * amount;
+            // const amountTax = amount + ppn + pph;
 
             await query(
-              `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount_tax, product_price, cn, cn_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 id,
                 productExist.product_id,
@@ -1081,9 +1073,10 @@ WHERE transaction_out_id = ?`,
                 productExist.qty,
                 productExist.ppn,
                 productExist.pph,
-                amount,
-                amountTax,
-                productPrice,
+                productExist.productTotalPrice,
+                productExist.price,
+                productExist.cn,
+                productExist.cn_type,
               ]
             );
           }
@@ -1093,7 +1086,17 @@ WHERE transaction_out_id = ?`,
 
       // logic kalau ada product
       for (const product of productList) {
-        const { product_id, discount, qty, pph, ppn } = product;
+        const {
+          product_id,
+          discount,
+          qty,
+          pph,
+          ppn,
+          cn,
+          cn_type,
+          price,
+          productTotalPrice,
+        } = product;
 
         // Check if product exists in transaction details
         const existingProduct = transactionDetails.find(
@@ -1180,23 +1183,23 @@ WHERE transaction_out_id = ?`,
               );
             }
           }
-          const productDiscDecimal = parseFloat(discount) / 100;
-          const productPpnDecimal = parseFloat(ppn) / 100;
-          const productPphDecimal = parseFloat(pph) / 100;
+          // const productDiscDecimal = parseFloat(discount) / 100;
+          // const productPpnDecimal = parseFloat(ppn) / 100;
+          // const productPphDecimal = parseFloat(pph) / 100;
 
-          let amount;
-          if (!productDiscDecimal || productDiscDecimal === 0) {
-            amount = productPrice * qty;
-          } else {
-            amount = productPrice * qty * (1 - productDiscDecimal);
-          }
+          // let amount;
+          // if (!productDiscDecimal || productDiscDecimal === 0) {
+          //   amount = productPrice * qty;
+          // } else {
+          //   amount = productPrice * qty * (1 - productDiscDecimal);
+          // }
 
-          const ResultPpn = productPpnDecimal * amount;
-          const ResultPph = productPphDecimal * amount;
-          const amountTax = amount + ResultPpn + ResultPph;
+          // const ResultPpn = productPpnDecimal * amount;
+          // const ResultPph = productPphDecimal * amount;
+          // const amountTax = amount + ResultPpn + ResultPph;
 
           await query(
-            `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount, amount_tax, product_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO transaction_out_detail (transaction_out_id, product_id, discount, qty, ppn, pph, amount_tax, product_price,cn,cn_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               product_id,
@@ -1204,9 +1207,10 @@ WHERE transaction_out_id = ?`,
               qty,
               ppn,
               pph,
-              amount,
-              amountTax,
-              productPrice,
+              productTotalPrice,
+              price,
+              cn,
+              cn_type,
             ]
           );
         }
@@ -1221,13 +1225,23 @@ WHERE transaction_out_id = ?`,
         [id, id, id]
       );
 
-      const updateAmountCN = await query(
-        `UPDATE transaction_out 
-SET amount_cn = amount_tax * (sales_cn / 100) 
-WHERE transaction_out_id = ?`,
+      await query(
+        `UPDATE transaction_out_detail
+     SET amount_cn = CASE 
+       WHEN cn_type = 'Percentage' THEN (product_price * qty) * (cn / 100)
+       WHEN cn_type = 'Nominal' THEN cn * qty
+     END
+     WHERE transaction_out_id = ?`,
         [id]
       );
 
+      // Calculate amount_cn and update in transaction_out table
+      await query(
+        `UPDATE transaction_out 
+     SET amount_cn = (SELECT SUM(amount_cn) FROM transaction_out_detail WHERE transaction_out_id = ?) 
+     WHERE transaction_out_id = ?`,
+        [id, id]
+      );
       // Berhasil
       return res
         .status(200)
@@ -1249,6 +1263,8 @@ WHERE transaction_out_id = ?`,
         tod.qty,
         tod.ppn,
         tod.pph,
+        tod.cn,
+        tod.cn_type,
         tod.product_price as price,
         tod.amount,
         tod.amount_tax,
