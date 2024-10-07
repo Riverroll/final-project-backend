@@ -1,164 +1,105 @@
-const { pool, query } = require("../database");
-const moment = require("moment-timezone");
+const SalesService = require("../services/salesService");
+const responseFormatter = require("../utils/responseFormatter");
 
 module.exports = {
   all: async (req, res) => {
     try {
-      const getSales = await query(`
-    SELECT 
-        s.*, 
-        COALESCE(SUM(tod.amount_cn), 0) AS total_transaction 
-    FROM 
-        sales_team s 
-    LEFT JOIN 
-        transaction_out tod ON s.sales_id = tod.salesman 
-    GROUP BY 
-        s.sales_id 
-    ORDER BY 
-        s.sales_name ASC
-`);
-
-      return res.status(200).send({
-        message: "Get Sales Data Success",
-        data: getSales,
-      });
+      const sales = await SalesService.getAllSales();
+      return res.send(responseFormatter(200, "Get Sales Data Success", sales));
     } catch (error) {
       console.error("Sales All Error:", error);
-      res.status(500).send({ message: error });
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
+
   master: async (req, res) => {
     try {
-      const countTotalSales = await query(
-        `SELECT COUNT(*) AS totalSales FROM sales_team`
-      );
+      const totalSales = await SalesService.getTotalSalesCount();
 
-      return res.status(200).send({
-        message: "Get Sales Data Success",
-        data: {
-          totalSales: countTotalSales[0].totalSales,
-        },
-      });
+      return res.send(
+        responseFormatter(200, "Get Sales Count Success", { totalSales })
+      );
     } catch (error) {
-      console.error("Sales All Error:", error);
-      res.status(500).send({ message: error });
+      console.error("Sales Master Error:", error);
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
+
   create: async (req, res) => {
     try {
       const { salesName } = req.body;
+      const response = await SalesService.createSales(salesName);
 
-      const errors = [];
-      if (!salesName) {
-        errors.push({ field: "name", message: "Name is required" });
+      if (response.error) {
+        return res.send(
+          responseFormatter(response.statusCode, response.message, null)
+        );
       }
 
-      if (errors.length > 0) {
-        return res.status(400).send({ errors });
-      }
-
-      const createdDate = moment
-        .tz("Asia/Jakarta")
-        .format("YYYY-MM-DD HH:mm:ss");
-
-      const result = await query(
-        `INSERT INTO sales_team (sales_name, created_at) VALUES (?, ?)`,
-        [salesName, createdDate]
-      );
-
-      return res.status(200).send({
-        message: "Sales created successfully",
-      });
+      return res.send(responseFormatter(201, "Sales created successfully", {}));
     } catch (error) {
-      console.error("Sales All Error:", error);
-      res.status(500).send({ message: error });
+      console.error("Sales Create Error:", error);
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
+
   delete: async (req, res) => {
     try {
       const { id } = req.params;
+      const response = await SalesService.deleteSales(id);
 
-      if (!id) {
-        return res.status(400).send({ message: "ID is required" });
+      if (response.error) {
+        return res.send(
+          responseFormatter(response.statusCode, response.message, null)
+        );
       }
 
-      const result = await query(`DELETE FROM sales_team WHERE sales_id = ?`, [
-        id,
-      ]);
-
-      if (result.affectedRows === 0) {
-        return res.status(404).send({ message: "Sales not found" });
-      }
-
-      return res.status(200).send({
-        message: "Sales deleted successfully",
-      });
+      return res.send(responseFormatter(200, "Sales deleted successfully", {}));
     } catch (error) {
-      console.error("Delete Sales Error:", error);
-      return res.status(500).send({ message: "Failed to delete Sales" });
+      console.error("Sales Delete Error:", error);
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
+
   detail: async (req, res) => {
     try {
       const { id } = req.params;
-      const getTransactionSales = await query(`
-            SELECT 
-                t.*, 
-                c.customer_name
-            FROM 
-                transaction_out t 
-            LEFT JOIN 
-                customers c ON t.customer_id = c.customer_id 
-            WHERE 
-                t.salesman = ${id}
-        `);
-      const getSales = await query(
-        `SELECT * FROM sales_team WHERE sales_id = ${id}`
+      const [salesDetail, salesTransaction] = await SalesService.getSalesDetail(
+        id
       );
 
-      return res.status(200).send({
-        message: "Get Sales Detail Success",
-        data: {
-          salesDetail: getSales[0],
-          salesTransaction: getTransactionSales,
-        },
-      });
+      if (!salesDetail) {
+        return res.send(responseFormatter(404, "Sales not found", null));
+      }
+
+      return res.send(
+        responseFormatter(200, "Get Sales Detail Success", {
+          salesDetail,
+          salesTransaction,
+        })
+      );
     } catch (error) {
       console.error("Sales Detail Error:", error);
-      res.status(500).send({ message: error });
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
+
   update: async (req, res) => {
     try {
       const { id } = req.params;
       const { salesName } = req.body;
-      const updatedDate = moment
-        .tz("Asia/Jakarta")
-        .format("YYYY-MM-DD HH:mm:ss");
-      const errors = [];
-      if (!salesName) {
-        errors.push({ field: "name", message: "Sales Name is required" });
-      }
-      if (errors.length > 0) {
-        return res.status(400).send({ errors });
-      }
-      const updateSales = await query(
-        `UPDATE sales_team 
-       SET sales_name = ? , updated_at = ?
-       WHERE sales_id = ?`,
-        [salesName, updatedDate, id]
-      );
+      const response = await SalesService.updateSales(id, salesName);
 
-      if (updateSales.affectedRows === 0) {
-        return res.status(404).send({ message: "Sales not found" });
+      if (response.error) {
+        return res.send(
+          responseFormatter(response.statusCode, response.message, null)
+        );
       }
 
-      return res.status(200).send({
-        message: "Sales updated successfully",
-      });
+      return res.send(responseFormatter(200, "Sales updated successfully", {}));
     } catch (error) {
       console.error("Sales Update Error:", error);
-      res.status(500).send({ message: "Failed to update Sales" });
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
 };

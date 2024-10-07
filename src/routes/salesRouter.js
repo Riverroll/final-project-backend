@@ -3,11 +3,11 @@ const { salesController } = require("../controllers");
 
 const router = express.Router();
 
-router.get("/all", salesController.all);
 router.get("/master", salesController.master);
-router.post("/create", salesController.create);
-router.delete("/delete/:id", salesController.delete);
-router.get("/detail/:id", salesController.detail);
-router.put("/update/:id", salesController.update);
+router.get("/", salesController.all);
+router.post("/", salesController.create);
+router.delete("/:id", salesController.delete);
+router.get("/:id", salesController.detail);
+router.put("/:id", salesController.update);
 
 module.exports = router;
