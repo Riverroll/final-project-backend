@@ -3,10 +3,10 @@ require("dotenv").config({ path: "../../.env" });
 const mysql = require("mysql2");
 const util = require("util");
 const env = process.env;
-console.log(process.env.MYSQL_HOST);
-console.log(process.env.MYSQL_USER);
-console.log(process.env.MYSQL_PASSWORD);
-console.log(process.env.MYSQL_DB_NAME, "dv");
+// console.log(process.env.MYSQL_HOST);
+// console.log(process.env.MYSQL_USER);
+// console.log(process.env.MYSQL_PASSWORD);
+// console.log(process.env.MYSQL_DB_NAME, "dv");
 // Gunakan createPool untuk menggunakan pooling koneksi
 const pool = mysql.createPool({
   host: env.MYSQL_HOST,
@@ -15,8 +15,10 @@ const pool = mysql.createPool({
   database: env.MYSQL_DB_NAME,
   port: env.MYSQL_PORT,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+  connectionLimit: 20, // Adjust as needed based on server capacity
+  queueLimit: 100, // Limit waiting requests in the queue
+  connectTimeout: 60000, // 10 seconds timeout for connecting
+  // acquireTimeout: 30000, // Timeout for acquiring a connection from the pool
 });
 
 // Handle disconnection dengan menggunakan pool.getConnection()
@@ -26,6 +28,7 @@ pool.on("connection", (connection) => {
   // Handle disconnection
   connection.on("error", (err) => {
     if (err.code === "PROTOCOL_CONNECTION_LOST" || err.code === "ECONNRESET") {
+      console.log(err.code);
       console.error("MySQL connection lost. Reconnecting...");
       pool.getConnection((err, connection) => {
         if (err) {

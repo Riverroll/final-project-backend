@@ -35,7 +35,7 @@ app.use("/api/data", dataRouter);
 app.use("/api/customer", customerRouter);
 app.use("/api/supplier", supplierRouter);
 app.use("/api/transactions", transactionsRouter);
-app.use("/api/product", productRouter);
+app.use("/api/products", productRouter);
 app.use("/api/sales", salesRouter);
 
 app.get("/api", (req, res) => {

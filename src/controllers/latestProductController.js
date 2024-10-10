@@ -1,6 +1,5 @@
 const { pool, query } = require("../database");
 const moment = require("moment-timezone");
-const env = process.env;
 
 module.exports = {
   all: async (req, res) => {

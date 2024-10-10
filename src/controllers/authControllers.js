@@ -91,7 +91,7 @@ module.exports = {
 
       const expirationTimestamp = Math.floor(Date.now() / 1000) + expiresIn;
       const currentTime = Math.floor(Date.now() / 1000);
-      console.log(env.JWT_SECRET);
+
       const token = jwt.sign(payload, env.JWT_SECRET || "rahasia", {
         expiresIn,
       });
