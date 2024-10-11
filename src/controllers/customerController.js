@@ -1,196 +1,142 @@
-const { pool, query } = require("../database");
-const moment = require("moment-timezone");
+const customerService = require("../services/customerService");
+const responseFormatter = require("../utils/responseFormatter");
 
 module.exports = {
   all: async (req, res) => {
     try {
-      const getCustomer = await query(
-        `SELECT * FROM customers ORDER BY customer_name ASC`
-      );
-      const getCountCustomer = await query(
-        `SELECT COUNT(*) AS totalCustomers FROM customers`
-      );
-
-      return res.status(200).send({
-        message: "Get Customer Data Success",
-        data: getCustomer,
-        total: getCountCustomer[0].totalCustomers,
-      });
+      const customers = await customerService.getAllCustomers();
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Get Customer Data Success", customers));
     } catch (error) {
       console.error("Customer All Error:", error);
-      res.status(500).send({ message: error });
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   allMaster: async (req, res) => {
     try {
-      const { id } = req.params;
-
-      const countTotalTransaction = await query(
-        `SELECT COUNT(*) AS totalTransaction FROM transaction_out
-        `
-      );
-
-      const countTotalTodayTransaction = await query(
-        `SELECT COUNT(*) AS totalTodayTransaction 
-FROM transaction_out 
-WHERE DATE(created_at) = CURDATE() ;
-`
-      );
-
-      // const customerName = await query(
-      //   `SELECT customer_name FROM customers WHERE customer_id = ${id};`
-      // );
-
-      return res.status(200).send({
-        message: "Get Customer Data Success",
-        data: {
-          // customerName: customerName[0].customer_name,
-          todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
-          totalTransaction: countTotalTransaction[0].totalTransaction,
-        },
-      });
+      const masterData = await customerService.getAllMasterData();
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Get Master Data Success", masterData));
     } catch (error) {
-      console.error("Customer All Error:", error);
-      res.status(500).send({ message: error });
+      console.error("Customer All Master Error:", error);
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   master: async (req, res) => {
     try {
       const { id } = req.params;
-
-      const countTotalTransaction = await query(
-        `SELECT COUNT(*) AS totalTransaction FROM transaction_out
-        WHERE customer_id = ${id}`
-      );
-
-      const countTotalTodayTransaction = await query(
-        `SELECT COUNT(*) AS totalTodayTransaction 
-FROM transaction_out 
-WHERE DATE(created_at) = CURDATE() AND customer_id = ${id};
-`
-      );
-
-      const customerName = await query(
-        `SELECT customer_name FROM customers WHERE customer_id = ${id};`
-      );
-
-      return res.status(200).send({
-        message: "Get Customer Data Success",
-        data: {
-          customerName: customerName[0].customer_name,
-          todayTransaction: countTotalTodayTransaction[0].totalTodayTransaction,
-          totalTransaction: countTotalTransaction[0].totalTransaction,
-        },
-      });
+      const masterData = await customerService.getMasterData(id);
+      if (!masterData) {
+        return res
+          .status(404)
+          .send(responseFormatter(404, "Customer not found", null));
+      }
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Get Customer Data Success", masterData));
     } catch (error) {
-      console.error("Customer All Error:", error);
-      res.status(500).send({ message: error });
+      console.error("Customer Master Error:", error);
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   create: async (req, res) => {
     try {
       const { customerName } = req.body;
 
-      const errors = [];
       if (!customerName) {
-        errors.push({ field: "name", message: "Name is required" });
+        return res
+          .status(400)
+          .send(responseFormatter(400, "Customer name is required", null));
       }
 
-      if (errors.length > 0) {
-        return res.status(400).send({ errors });
-      }
+      await customerService.createCustomer(customerName);
 
-      const createdDate = moment
-        .tz("Asia/Jakarta")
-        .format("YYYY-MM-DD HH:mm:ss");
-
-      const result = await query(
-        `INSERT INTO customers (customer_name, created_at) VALUES (?, ?)`,
-        [customerName, createdDate]
-      );
-
-      return res.status(200).send({
-        message: "Customer created successfully",
-      });
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Customer created successfully", null));
     } catch (error) {
-      console.error("Customer All Error:", error);
-      res.status(500).send({ message: error });
+      console.error("Create Customer Error:", error);
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   delete: async (req, res) => {
     try {
       const { id } = req.params;
-
       if (!id) {
-        return res.status(400).send({ message: "ID is required" });
+        return res
+          .status(400)
+          .send(responseFormatter(400, "ID is required", null));
       }
 
-      const result = await query(
-        `DELETE FROM customers WHERE customer_id = ?`,
-        [id]
-      );
+      const deleted = await customerService.deleteCustomer(id);
 
-      if (result.affectedRows === 0) {
-        return res.status(404).send({ message: "Customer not found" });
-      }
-
-      return res.status(200).send({
-        message: "Customer deleted successfully",
-      });
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Customer deleted successfully", null));
     } catch (error) {
       console.error("Delete Customer Error:", error);
-      return res.status(500).send({ message: "Failed to delete Customer" });
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   detail: async (req, res) => {
     try {
       const { id } = req.params;
-      const getCustomer = await query(
-        `SELECT * FROM customers
-        WHERE customer_id = ${id}
-        `
-      );
+      const customer = await customerService.getCustomerDetail(id);
+      if (!customer) {
+        return res
+          .status(404)
+          .send(responseFormatter(404, "Customer not found", null));
+      }
 
-      return res.status(200).send({
-        message: "Get Customer Detail Success",
-        data: getCustomer[0],
-      });
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Get Customer Detail Success", customer));
     } catch (error) {
       console.error("Customer Detail Error:", error);
-      res.status(500).send({ message: error });
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
+
   update: async (req, res) => {
     try {
       const { id } = req.params;
       const { customerName } = req.body;
-      const updatedDate = moment
-        .tz("Asia/Jakarta")
-        .format("YYYY-MM-DD HH:mm:ss");
-      const errors = [];
+
       if (!customerName) {
-        errors.push({ field: "name", message: "Customer Name is required" });
-      }
-      if (errors.length > 0) {
-        return res.status(400).send({ errors });
-      }
-      const updateCustomer = await query(
-        `UPDATE customers 
-       SET customer_name = ? , updated_at = ?
-       WHERE customer_id = ?`,
-        [customerName, updatedDate, id]
-      );
-
-      if (updateCustomer.affectedRows === 0) {
-        return res.status(404).send({ message: "Customer not found" });
+        return res
+          .status(400)
+          .send(responseFormatter(400, "Customer name is required", null));
       }
 
-      return res.status(200).send({
-        message: "Customer updated successfully",
-      });
+      const updated = await customerService.updateCustomer(id, customerName);
+
+      return res
+        .status(200)
+        .send(responseFormatter(200, "Customer updated successfully", null));
     } catch (error) {
       console.error("Customer Update Error:", error);
-      res.status(500).send({ message: "Failed to update Customer" });
+      return res
+        .status(500)
+        .send(responseFormatter(500, "Internal Server Error", error.message));
     }
   },
 };
