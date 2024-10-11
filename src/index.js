@@ -33,7 +33,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/attendance", attendanceRouter);
 app.use("/api/data", dataRouter);
 app.use("/api/customers", customerRouter);
-app.use("/api/supplier", supplierRouter);
+app.use("/api/suppliers", supplierRouter);
 app.use("/api/transactions", transactionsRouter);
 app.use("/api/products", productRouter);
 app.use("/api/sales", salesRouter);
