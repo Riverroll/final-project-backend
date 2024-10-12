@@ -52,21 +52,21 @@ module.exports = {
       productType,
       productMerk,
       aklAkd,
-      price,
+      // price,
       stock,
       expired,
       supplierId,
       createdDate,
     } = productData;
     const result = await query(
-      `INSERT INTO products (product_id, product_name, product_type, product_merk, akl_akd, price, stock, isExpired, supplier_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO products (product_id, product_name, product_type, product_merk, akl_akd, stock, isExpired, supplier_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newProductId,
         name,
         productType,
         productMerk,
         aklAkd,
-        price,
+        // price,
         stock,
         expired,
         supplierId,
@@ -200,7 +200,7 @@ module.exports = {
 
   getProductsBySupplierId: async (supplierId) => {
     const result = await query(
-      `SELECT product_id, product_name, price, stock, isExpired FROM products WHERE supplier_id = ?`,
+      `SELECT product_id, product_name, stock, isExpired FROM products WHERE supplier_id = ?`,
       [supplierId]
     );
     return result;
