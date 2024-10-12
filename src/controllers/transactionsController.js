@@ -1,76 +1,51 @@
 const { pool, query } = require("../database");
 const moment = require("moment-timezone");
-
-const env = process.env;
+const TransactionService = require("../services/transactionService");
+const responseFormatter = require("../utils/responseFormatter");
 
 module.exports = {
-  transactionInList: async (req, res) => {
+  getAllTransactionIn: async (req, res) => {
     try {
-      const getTransactionIn = await query(
-        `SELECT ti.*,s.supplier_name,s.supplier_code,u.name FROM transaction_in as ti
-        LEFT JOIN suppliers as s on s.supplier_id = ti.supplier_id
-        LEFT JOIN user as u on u.user_id = ti.pic
-        ORDER BY ti.created_at DESC
-        `
+      const transactions = await TransactionService.getAllTransactionIn();
+      return res.send(
+        responseFormatter(
+          200,
+          "Get All Transaction In Data Success",
+          transactions
+        )
       );
-
-      return res.status(200).send({
-        message: "Get All Transaction In Data Success",
-        data: getTransactionIn,
-      });
     } catch (error) {
       console.error("All Transaction In Error:", error);
-      res.status(500).send({ message: error });
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
-  transactionInDetail: async (req, res) => {
+  getTransactionInDetail: async (req, res) => {
     try {
       const { id } = req.params;
-      const getTransactionInDetail = await query(`
-      SELECT 
-        tid.transaction_in_id,
-        tid.transaction_in_detail_id,
-        s.supplier_name,
-        s.supplier_code,
-        p.product_name,
-        pt.type_name,
-        pm.merk_name,
-        p.akl_akd,
-        tid.quantity,
-        tid.price,
-        tid.product_id,
-        tid.product_code,
-        tid.batch_lot,
-        pe.expired_date
-      FROM transaction_in as ti
-      LEFT JOIN suppliers s ON s.supplier_id = ti.supplier_id
-      LEFT JOIN transaction_in_detail tid ON tid.transaction_in_id = ti.transaction_in_id 
-      LEFT JOIN products p ON p.product_id = tid.product_id 
-      LEFT JOIN product_type pt ON p.product_type = pt.product_type_id 
-      LEFT JOIN product_merk pm ON p.product_merk = pm.product_merk_id 
-      LEFT JOIN (
-        SELECT product_id, MAX(expired_date) AS expired_date
-        FROM product_expired
-        WHERE transaction_in_id = ${id}
-        GROUP BY product_id
-      ) pe ON p.product_id = pe.product_id
-      WHERE tid.transaction_in_id = ${id}
-    `);
-
-      const getTransactionIn = await query(
-        `SELECT transaction_in.*,suppliers.supplier_name,suppliers.supplier_code FROM transaction_in LEFT JOIN suppliers ON suppliers.supplier_id = transaction_in.supplier_id WHERE transaction_in_id = ${id}`
+      const transactionDetail = await TransactionService.getTransactionInDetail(
+        id
       );
 
-      return res.status(200).send({
-        message: "Get Transaction In Detail Data Success",
-        data: {
-          transactionIn: getTransactionIn[0],
-          transactionInDetail: getTransactionInDetail,
-        },
-      });
+      if (transactionDetail.error) {
+        return res.send(
+          responseFormatter(
+            transactionDetail.statusCode,
+            transactionDetail.message,
+            null
+          )
+        );
+      }
+
+      return res.send(
+        responseFormatter(
+          200,
+          "Get Transaction In Detail Data Success",
+          transactionDetail
+        )
+      );
     } catch (error) {
       console.error("Transaction In Detail Error:", error);
-      res.status(500).send({ message: error });
+      return res.send(responseFormatter(500, "Internal Server Error", null));
     }
   },
   insertTransactionIn: async (req, res) => {
@@ -85,12 +60,16 @@ module.exports = {
         tax,
         timeToPayment,
         userId,
+        shippingCost,
       } = req.body;
       const createdDate = moment
         .tz("Asia/Jakarta")
         .format("YYYY-MM-DD HH:mm:ss");
 
       const errors = [];
+      if (!noKita) {
+        errors.push({ field: "noKita", message: "No Kita is required" });
+      }
       if (!noFaktur) {
         errors.push({ field: "noFaktur", message: "Faktur is required" });
       }
@@ -124,7 +103,7 @@ module.exports = {
       await query("START TRANSACTION");
 
       const insertTransaction = await query(
-        `INSERT INTO transaction_in (no_faktur,no_kita, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_in (no_faktur,no_kita, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
           noKita,
@@ -136,6 +115,7 @@ module.exports = {
           createdDate,
           tax,
           userId,
+          shippingCost,
         ]
       );
 
@@ -155,11 +135,15 @@ module.exports = {
           });
         }
 
-        const price = productData[0].price;
-        const totalPrice = price * product.quantity;
+        const price = product.product_price;
+        const discount = product.product_discount || 0;
+        const discountedPrice = price - price * (discount / 100);
+        const totalPrice = discountedPrice * product.quantity;
+
         amount += totalPrice;
+
         await query(
-          `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity, product_code, batch_lot) VALUES (?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO transaction_in_detail (transaction_in_id, product_id, price, quantity, product_code, batch_lot, discount, price_discount) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             transactionId,
             product.product_id,
@@ -167,6 +151,8 @@ module.exports = {
             product.quantity,
             product.product_code,
             product.batch_lot,
+            discount,
+            discountedPrice,
           ]
         );
 
@@ -181,7 +167,6 @@ module.exports = {
             ]
           );
 
-          // Kurangi stok di tabel products berdasarkan product_id dan quantity
           await query(
             `UPDATE products SET stock = stock + ? WHERE product_id = ?`,
             [product.quantity, product.product_id]
@@ -216,6 +201,7 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+
   updateTransactionIn: async (req, res) => {
     try {
       const { id } = req.params;
@@ -227,6 +213,7 @@ module.exports = {
         supplierId,
         tax,
         timeToPayment,
+        shippingCost,
       } = req.body;
       const updatedDate = moment
         .tz("Asia/Jakarta")
@@ -348,16 +335,21 @@ module.exports = {
             `SELECT price,isExpired FROM products WHERE product_id = ?`,
             [productInList.product_id]
           );
+          const price = productInList.product_price;
+          const discount = productInList.product_discount || 0;
+          const discountedPrice = price - price * (discount / 100);
 
           await query(
-            `INSERT INTO transaction_in_detail (transaction_in_id, product_id, product_code, batch_lot, price, quantity) VALUES (?,?, ?, ?, ?, ?)`,
+            `INSERT INTO transaction_in_detail (transaction_in_id, product_id, product_code, batch_lot, price, quantity, discount,price_discount) VALUES (?,?, ?, ?, ?, ?, ?, ?)`,
             [
               id,
               productInList.product_id,
               productInList.product_code,
               productInList.batch_lot,
-              productInfo[0].price,
+              productInList.product_price,
               productInList.quantity,
+              productInList.product_discount,
+              discountedPrice,
             ]
           );
 
@@ -409,12 +401,19 @@ module.exports = {
         // Ambil harga dan jumlah dari setiap produk
         const productPrice = transactionDetailCheck.price;
         const productQuantity = transactionDetailCheck.quantity;
+        const productDiscount = transactionDetailCheck.discount || 0;
 
         // Hitung total jumlah untuk produk tersebut
         const productTotal = productPrice * productQuantity;
 
-        // Tambahkan total jumlah produk ke dalam total amount
-        amount += productTotal;
+        // Hitung jumlah diskon untuk produk tersebut
+        const discountAmount = (productTotal * productDiscount) / 100; // Diskon dalam persen
+
+        // Kurangi jumlah diskon dari total produk
+        const productTotalAfterDiscount = productTotal - discountAmount;
+
+        // Tambahkan total jumlah produk setelah diskon ke dalam total amount
+        amount += productTotalAfterDiscount;
       }
 
       // Hitung total amount berdasarkan pajak jika ada
@@ -431,7 +430,8 @@ module.exports = {
       time_to_payment = ?,
       amount = ?,
       amount_tax = ?,
-      updated_at = ?
+      updated_at = ?,
+      shipping_cost = ?
       WHERE transaction_in_id = ?`,
         [
           noFaktur,
@@ -443,6 +443,7 @@ module.exports = {
           amount,
           totalAmount,
           updatedDate,
+          shippingCost,
           id,
         ]
       );
@@ -456,7 +457,6 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
-
   transactionOutListCustomer: async (req, res) => {
     try {
       const { id } = req.params;

@@ -3,9 +3,9 @@ const { transactionsController } = require("../controllers");
 
 const router = express.Router();
 
-router.get("/in/list", transactionsController.transactionInList);
-router.get("/in/detail/:id", transactionsController.transactionInDetail);
-router.put("/in/update/:id", transactionsController.updateTransactionIn);
+router.get("/in", transactionsController.getAllTransactionIn);
+router.get("/in/:id", transactionsController.getTransactionInDetail);
+router.put("/in/:id", transactionsController.updateTransactionIn);
 router.post("/in/create", transactionsController.insertTransactionIn);
 router.get("/out/list/:id", transactionsController.transactionOutListCustomer);
 router.get("/out/list", transactionsController.transactionOutList);
