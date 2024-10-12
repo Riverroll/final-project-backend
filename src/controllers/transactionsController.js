@@ -93,7 +93,17 @@ module.exports = {
           field: "productList",
           message: "Product List is required",
         });
+      } else {
+        productList.forEach((product, index) => {
+          if (!product.product_price) {
+            errors.push({
+              field: `productList`,
+              message: "Product Price is required",
+            });
+          }
+        });
       }
+
       if (errors.length > 0) {
         return res.status(400).send({ errors });
       }
@@ -201,7 +211,6 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
-
   updateTransactionIn: async (req, res) => {
     try {
       const { id } = req.params;
@@ -272,6 +281,42 @@ module.exports = {
           }
         } else {
           // Jika produk ada dalam productList
+          const price = productInList.product_price;
+          const discount = productInList.product_discount || 0;
+          const discountedPrice = price - price * (discount / 100);
+
+          // Update data di tabel transaction_in_detail
+          await query(
+            `UPDATE transaction_in_detail 
+              SET product_code = ?, 
+                  batch_lot = ?, 
+                  discount = ?, 
+                  price = ?,
+                  price_discount = ?
+              WHERE product_id = ? and transaction_in_id = ?`,
+            [
+              productInList.product_code,
+              productInList.batch_lot,
+              productInList.product_discount,
+              productInList.product_price,
+              discountedPrice,
+              productInList.product_id,
+              productInList.transaction_in_id,
+            ]
+          );
+
+          // Update data di tabel product_expired
+          await query(
+            `UPDATE product_expired
+              SET expired_date = ?
+              WHERE product_id = ? and transaction_in_id = ?`,
+            [
+              productInList.expired_date,
+              productInList.product_id,
+              productInList.transaction_in_id,
+            ]
+          );
+
           // Periksa perubahan quantity
           if (productInList.quantity !== transactionDetail.quantity) {
             // Kurangi stok lama di table products
@@ -335,6 +380,7 @@ module.exports = {
             `SELECT price,isExpired FROM products WHERE product_id = ?`,
             [productInList.product_id]
           );
+
           const price = productInList.product_price;
           const discount = productInList.product_discount || 0;
           const discountedPrice = price - price * (discount / 100);
@@ -399,6 +445,7 @@ module.exports = {
       // Iterasi melalui setiap detail transaksi
       for (const transactionDetailCheck of transactionInDetails) {
         // Ambil harga dan jumlah dari setiap produk
+
         const productPrice = transactionDetailCheck.price;
         const productQuantity = transactionDetailCheck.quantity;
         const productDiscount = transactionDetailCheck.discount || 0;
