@@ -1,4 +1,4 @@
-const authControllers = require("./authControllers");
+const authController = require("./authController");
 const attendanceController = require("./attendanceController");
 const dataController = require("./dataController");
 const customerController = require("./customerController");
@@ -8,7 +8,7 @@ const productsController = require("./productsController");
 const salesController = require("./salesController");
 
 module.exports = {
-  authControllers,
+  authController,
   attendanceController,
   dataController,
   customerController,

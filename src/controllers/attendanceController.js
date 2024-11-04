@@ -208,22 +208,64 @@ module.exports = {
   },
   all: async (req, res) => {
     try {
-      const { user_id, role_id } = req.body;
-      let getAttendanceData;
+      const { user_id, role_id, page = 1, itemsPerPage = 10 } = req.body;
+
+      // Tentukan offset untuk pagination
+      const offset = (page - 1) * itemsPerPage;
+
+      let getAttendanceData, countQuery;
+
       if (role_id == 1) {
+        // Query data dengan pagination untuk admin
         getAttendanceData = await query(
-          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id order by attendance.date desc`
+          `SELECT attendance.*, user.name 
+                 FROM attendance 
+                 LEFT JOIN user ON attendance.user_id = user.user_id 
+                 ORDER BY attendance.date DESC 
+                 LIMIT ${pool.escape(itemsPerPage)} OFFSET ${pool.escape(
+            offset
+          )}`
+        );
+
+        // Query untuk total data (untuk menghitung total halaman)
+        countQuery = await query(
+          `SELECT COUNT(*) as totalCount 
+                 FROM attendance 
+                 LEFT JOIN user ON attendance.user_id = user.user_id`
         );
       } else {
+        // Query data dengan pagination untuk user biasa
         getAttendanceData = await query(
-          `SELECT attendance.*, user.name FROM attendance LEFT JOIN user ON attendance.user_id = user.user_id WHERE attendance.user_id = ${pool.escape(
-            user_id
-          )} order by attendance.date desc`
+          `SELECT attendance.*, user.name 
+                 FROM attendance 
+                 LEFT JOIN user ON attendance.user_id = user.user_id 
+                 WHERE attendance.user_id = ${pool.escape(user_id)} 
+                 ORDER BY attendance.date DESC 
+                 LIMIT ${pool.escape(itemsPerPage)} OFFSET ${pool.escape(
+            offset
+          )}`
+        );
+
+        // Query untuk total data (untuk menghitung total halaman) khusus user
+        countQuery = await query(
+          `SELECT COUNT(*) as totalCount 
+                 FROM attendance 
+                 LEFT JOIN user ON attendance.user_id = user.user_id 
+                 WHERE attendance.user_id = ${pool.escape(user_id)}`
         );
       }
+
+      const totalCount = countQuery[0].totalCount;
+      const totalPages = Math.ceil(totalCount / itemsPerPage);
+
       return res.status(200).send({
         message: "Get User Attendance Success",
-        data: getAttendanceData,
+        data: {
+          results: getAttendanceData,
+          totalCount,
+          currentPage: page,
+          totalPages,
+        },
       });
     } catch (error) {
       console.error("Error:", error);

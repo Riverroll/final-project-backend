@@ -256,84 +256,70 @@ module.exports = {
   },
   detailUser: async (req, res) => {
     try {
-      const { id } = req.params;
-      const getUser = await query(
-        `SELECT * FROM user
-        WHERE user_id = ${id}
-        `
-      );
+      const { id } = req.params; // Get user ID from the request parameters
+      const user = await authService.getUserById(id); // Fetch user details using the service
 
-      return res.status(200).send({
-        message: "Get User Detail Success",
-        data: getUser[0],
-      });
+      if (!user) {
+        return res
+          .status(404)
+          .send(formatResponse(404, "User not found", null));
+      }
+
+      res
+        .status(200)
+        .send(formatResponse(200, "Get User Detail Success", user));
     } catch (error) {
       console.error("User Detail Error:", error);
-      res.status(500).send({ message: error });
+      res.status(500).send(formatResponse(500, "Internal Server Error", null));
     }
   },
+
   editUser: async (req, res) => {
     try {
-      const { user_id, name, email, role_id } = req.body;
+      const { user_id, name, email, role_id } = req.body; // Extract fields from the request body
+
+      // Validate required fields
       if (!name) {
-        return res.status(400).send({ message: "Name is required" });
+        return res
+          .status(400)
+          .send(formatResponse(400, "Name is required", null));
       }
       if (!email) {
-        return res.status(400).send({ message: "Email is required" });
+        return res
+          .status(400)
+          .send(formatResponse(400, "Email is required", null));
       }
       if (!role_id) {
-        return res.status(400).send({ message: "Role is required" });
-      }
-      const user = await query(
-        `SELECT * FROM user WHERE user_id=${pool.escape(user_id)}`
-      );
-
-      if (user.length === 0) {
-        return res.status(404).send({ message: "User not found" });
+        return res
+          .status(400)
+          .send(formatResponse(400, "Role is required", null));
       }
 
-      // const existingEmail = await query(
-      //   `SELECT * FROM user WHERE email=${pool.escape(email)}`
-      // );
-
-      // if (existingEmail.length > 0) {
-      //   return res.status(400).send({ message: "Email is already registered" });
-      // }
-
-      // const existingUsername = await query(
-      //   `SELECT * FROM user WHERE name=${pool.escape(name)}`
-      // );
-
-      // if (existingUsername.length > 0) {
-      //   return res
-      //     .status(400)
-      //     .send({ message: "Username is already registered" });
-      // }
-
-      if (name !== undefined) {
-        user[0].name = name;
+      // Fetch user details to check if the user exists
+      const user = await authService.getUserById(user_id);
+      if (!user) {
+        return res
+          .status(404)
+          .send(formatResponse(404, "User not found", null));
       }
 
-      if (email !== undefined) {
-        user[0].email = email;
-      }
+      // Update user information
+      const updatedUser = {
+        ...user,
+        name,
+        email,
+        role_id,
+      };
 
-      if (role_id !== undefined) {
-        user[0].role_id = role_id;
-      }
+      // Update user using the service
+      await authService.updateUser(updatedUser);
 
-      await query(
-        `UPDATE user SET name=${pool.escape(user[0].name)}, email=${pool.escape(
-          user[0].email
-        )}, password=${pool.escape(user[0].password)}, role_id=${pool.escape(
-          user[0].role_id
-        )} WHERE user_id=${pool.escape(user_id)}`
-      );
-
-      return res.status(200).send({ message: "User updated successfully" });
+      res
+        .status(200)
+        .send(formatResponse(200, "User updated successfully", null));
     } catch (error) {
       console.error("Edit User Error:", error);
-      res.status(500).send({ message: "Internal Server Error" });
+      res.status(500).send(formatResponse(500, "Internal Server Error", null));
     }
   },
   resetPasswordUser: async (req, res) => {
