@@ -81,7 +81,6 @@ module.exports = {
       res.status(500).send({ message: "Internal Server Error" });
     }
   },
-
   dataUser: async (req, res) => {
     try {
       const { page, itemsPerPage, sortOrder, searchName } = req.body;
@@ -143,7 +142,6 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
-
   masterTransactionForm: async (req, res) => {
     try {
       const masterSupplier = await query(
