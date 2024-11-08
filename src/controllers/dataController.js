@@ -315,4 +315,17 @@ module.exports = {
       res.status(500).send({ message: error });
     }
   },
+  userList: async (req, res) => {
+    try {
+      const users = await query(`SELECT * FROM user`);
+
+      return res.status(200).send({
+        message: "Get Master User Data Success",
+        data: users,
+      });
+    } catch (error) {
+      console.error("Master User Error:", error);
+      res.status(500).send({ message: error });
+    }
+  },
 };
