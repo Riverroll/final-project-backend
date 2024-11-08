@@ -50,7 +50,7 @@ module.exports = {
 
       data: {
         token,
-        id: user[0].user_id,
+        user_id: user[0].user_id,
         name: user[0].name,
         email: user[0].email,
         isAdmin: user[0].isAdmin,

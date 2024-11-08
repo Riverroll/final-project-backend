@@ -208,52 +208,82 @@ module.exports = {
   },
   all: async (req, res) => {
     try {
-      const { user_id, role_id, page = 1, itemsPerPage = 10 } = req.body;
+      const {
+        user_id,
+        role_id,
+        page = 1,
+        itemsPerPage = 10,
+        searchQuery = "",
+        start_date,
+        end_date,
+      } = req.body;
+
+      // Sanitize search query
+      const sanitizedSearchQuery = `%${searchQuery}%`;
+
+      // Initialize the date conditions (if start_date and end_date are provided)
+      let dateCondition = "";
+      if (start_date && end_date) {
+        dateCondition = `AND attendance.date BETWEEN ${pool.escape(
+          start_date
+        )} AND ${pool.escape(end_date)}`;
+      } else if (start_date) {
+        dateCondition = `AND attendance.date >= ${pool.escape(start_date)}`;
+      } else if (end_date) {
+        dateCondition = `AND attendance.date <= ${pool.escape(end_date)}`;
+      }
 
       // Tentukan offset untuk pagination
       const offset = (page - 1) * itemsPerPage;
 
       let getAttendanceData, countQuery;
 
-      if (role_id == 1) {
-        // Query data dengan pagination untuk admin
-        getAttendanceData = await query(
-          `SELECT attendance.*, user.name 
-                 FROM attendance 
-                 LEFT JOIN user ON attendance.user_id = user.user_id 
-                 ORDER BY attendance.date DESC 
-                 LIMIT ${pool.escape(itemsPerPage)} OFFSET ${pool.escape(
-            offset
-          )}`
-        );
+      // Initialize the condition for user_id
+      let userCondition = "";
 
-        // Query untuk total data (untuk menghitung total halaman)
-        countQuery = await query(
-          `SELECT COUNT(*) as totalCount 
-                 FROM attendance 
-                 LEFT JOIN user ON attendance.user_id = user.user_id`
-        );
+      if (role_id === 1) {
+        // For admin (role_id = 1), user_id is optional
+        if (user_id) {
+          // If user_id is provided, filter by that user_id
+          userCondition = `AND attendance.user_id = ${pool.escape(user_id)}`;
+        }
+        // Otherwise, fetch data for all users
       } else {
-        // Query data dengan pagination untuk user biasa
-        getAttendanceData = await query(
-          `SELECT attendance.*, user.name 
-                 FROM attendance 
-                 LEFT JOIN user ON attendance.user_id = user.user_id 
-                 WHERE attendance.user_id = ${pool.escape(user_id)} 
-                 ORDER BY attendance.date DESC 
-                 LIMIT ${pool.escape(itemsPerPage)} OFFSET ${pool.escape(
-            offset
-          )}`
-        );
-
-        // Query untuk total data (untuk menghitung total halaman) khusus user
-        countQuery = await query(
-          `SELECT COUNT(*) as totalCount 
-                 FROM attendance 
-                 LEFT JOIN user ON attendance.user_id = user.user_id 
-                 WHERE attendance.user_id = ${pool.escape(user_id)}`
-        );
+        // For non-admin users, always filter by the given user_id
+        userCondition = `AND attendance.user_id = ${pool.escape(user_id)}`;
       }
+
+      // Query for attendance data
+      getAttendanceData = await query(
+        `SELECT attendance.*, user.name 
+         FROM attendance 
+         LEFT JOIN user ON attendance.user_id = user.user_id 
+         WHERE (user.name LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.address LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.description LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.product_desc LIKE ${pool.escape(
+              sanitizedSearchQuery
+            )}) 
+         ${userCondition} 
+         ${dateCondition} 
+         ORDER BY attendance.date DESC 
+         LIMIT ${pool.escape(itemsPerPage)} OFFSET ${pool.escape(offset)}`
+      );
+
+      // Query for total data (to calculate total pages)
+      countQuery = await query(
+        `SELECT COUNT(*) as totalCount 
+         FROM attendance 
+         LEFT JOIN user ON attendance.user_id = user.user_id 
+         WHERE (user.name LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.address LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.description LIKE ${pool.escape(sanitizedSearchQuery)} 
+            OR attendance.product_desc LIKE ${pool.escape(
+              sanitizedSearchQuery
+            )}) 
+         ${userCondition} 
+         ${dateCondition}`
+      );
 
       const totalCount = countQuery[0].totalCount;
       const totalPages = Math.ceil(totalCount / itemsPerPage);
