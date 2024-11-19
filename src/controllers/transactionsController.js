@@ -61,6 +61,7 @@ module.exports = {
         timeToPayment,
         userId,
         shippingCost,
+        fakturDate,
       } = req.body;
       const createdDate = moment
         .tz("Asia/Jakarta")
@@ -113,9 +114,10 @@ module.exports = {
       await query("START TRANSACTION");
 
       const insertTransaction = await query(
-        `INSERT INTO transaction_in (no_faktur,no_kita, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_in (no_faktur, faktur_date, no_kita, note, payment_method, amount, supplier_id, time_to_payment, created_at, tax, pic, shipping_cost) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
+          fakturDate,
           noKita,
           note,
           paymentMethod,
@@ -216,6 +218,7 @@ module.exports = {
       const { id } = req.params;
       const {
         noFaktur,
+        fakturDate,
         note,
         paymentMethod,
         productList,
@@ -306,12 +309,21 @@ module.exports = {
           );
 
           // Update data di tabel product_expired
+          const expiredDate = new Date(productInList.expired_date);
+
+          // Memformat tanggal menjadi 'YYYY-MM-DD HH:MM:SS'
+          const formattedDate = expiredDate
+            .toISOString()
+            .replace("T", " ")
+            .slice(0, 19);
+
+          // Sekarang kita bisa menggunakan formattedDate dalam query
           await query(
             `UPDATE product_expired
-              SET expired_date = ?
-              WHERE product_id = ? and transaction_in_id = ?`,
+    SET expired_date = ?
+    WHERE product_id = ? and transaction_in_id = ?`,
             [
-              productInList.expired_date,
+              formattedDate,
               productInList.product_id,
               productInList.transaction_in_id,
             ]
@@ -465,11 +477,19 @@ module.exports = {
 
       // Hitung total amount berdasarkan pajak jika ada
       const totalAmount = tax ? amount + (amount * tax) / 100 : amount;
+      const faktur = new Date(fakturDate);
+
+      // Memformat tanggal menjadi 'YYYY-MM-DD HH:MM:SS'
+      const formattedFakturDate = faktur
+        .toISOString()
+        .replace("T", " ")
+        .slice(0, 19);
 
       // Update data transaction_in
       await query(
         `UPDATE transaction_in SET 
       no_faktur = ?,
+      faktur_date = ?,
       note = ?,
       payment_method = ?,
       supplier_id = ?,
@@ -482,6 +502,7 @@ module.exports = {
       WHERE transaction_in_id = ?`,
         [
           noFaktur,
+          formattedFakturDate,
           note,
           paymentMethod,
           supplierId,
@@ -535,7 +556,7 @@ module.exports = {
         LEFT JOIN customers c ON c.customer_id = tro.customer_id
         LEFT JOIN user u ON u.user_id = tro.pic
         LEFT JOIN sales_team s ON s.sales_id = tro.salesman
-        ORDER BY tro.created_at ASC 
+        ORDER BY tro.created_at DESC 
         `
       );
 
@@ -552,6 +573,7 @@ module.exports = {
     try {
       const {
         noFaktur,
+        fakturDate,
         paymentMethod,
         productList,
         customerId,
@@ -609,9 +631,10 @@ module.exports = {
         .format("YYYY-MM-DD HH:mm:ss");
 
       const insertTransactionOutResult = await query(
-        `INSERT INTO transaction_out (no_faktur, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at, delivery_date, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transaction_out (no_faktur, faktur_date, no_po, salesman, note, payment_method, customer_id, time_to_payment, created_at, delivery_date, pic) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           noFaktur,
+          fakturDate,
           noPo,
           salesman,
           note,
@@ -800,6 +823,7 @@ module.exports = {
       const { id } = req.params;
       const {
         noFaktur,
+        fakturDate,
         paymentMethod,
         productList,
         customerId,
@@ -850,10 +874,12 @@ module.exports = {
       if (errors.length > 0) {
         return res.status(400).send({ errors });
       }
+
       // Update transaction_out table
       const updateTransactionOutResult = await query(
         `UPDATE transaction_out SET 
         no_faktur = ?, 
+        faktur_date = ?,
         no_po = ?, 
         salesman = ?, 
         note = ?, 
@@ -865,6 +891,7 @@ module.exports = {
       WHERE transaction_out_id = ?`,
         [
           noFaktur,
+          fakturDate,
           noPo,
           salesman,
           note,
@@ -953,7 +980,6 @@ module.exports = {
         } else {
           // Jika produk ada dalam daftar produk yang dikirimkan
           const { product_id, discount, qty, ppn, pph } = productExist;
-          console.log(product_id, "cek");
 
           if (
             productExist.qty != transactionDetail.qty ||
